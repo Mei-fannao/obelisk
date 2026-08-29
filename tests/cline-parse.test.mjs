@@ -48,7 +48,7 @@ test('cline provider discovers fixture session directories with stable cursors',
   );
   for (const unit of units) {
     assert.equal(unit.key, join(root, 'sessions', unit.sessionId.slice('cline:'.length)));
-    assert.match(unit.meta.currentCursor, /^\d+(\.\d+)?:\d+:\d+(\.\d+)?:\d+$/);
+    assert.match(unit.meta.currentCursor, /^\d+(\.\d+)?:\d+:\d+(\.\d+)?$/);
   }
 
   const unchanged = provider.discover({
@@ -147,6 +147,20 @@ test('cline provider indexes the small session end to end (ADR-0007 round trip)'
     persistedDetail.messages.flatMap((message) => message.tool_calls ?? []).map((call) => call.name),
     ['ask_question', 'run_commands', 'read_files', 'run_commands'],
   );
+  // The parent chain crosses message boundaries: within one message text
+  // follows thinking; the next message's first record chains onto the
+  // previous message's last record.
+  const messageRecords = records.filter((record) => record.kind === 'message');
+  const blockRecord = (messageId, index) => messageRecords
+    .find((record) => record.uuid === `cline:${SMALL}:${messageId}:b${index}`);
+  const firstUser = blockRecord('msg_mt9tuh9x_1', 0);
+  assert.equal(firstUser.parent_uuid, null);
+  const thinking = blockRecord('msg_P55lElF5', 0);
+  const text = blockRecord('msg_P55lElF5', 1);
+  assert.equal(text.parent_uuid, thinking.uuid);
+  assert.equal(thinking.parent_uuid, firstUser.uuid);
+  const secondFirst = blockRecord('msg_0R5l5teJ', 0);
+  assert.equal(secondFirst.parent_uuid, text.uuid);
   db.close();
 });
 

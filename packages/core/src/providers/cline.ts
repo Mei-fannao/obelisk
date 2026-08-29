@@ -9,9 +9,10 @@
 // text / thinking / tool_use / tool_result / image). Structurally the Kimi
 // shape — one directory per session, aggregate cursor, full reparse — so the
 // kimi.ts patterns apply: unit key = session directory, snapshot parse with a
-// delete-session head and countMode 'total', cursor = max mtime + size +
-// message count across the session's files (same-mtime rewrites change one of
-// the other two).
+// delete-session head and countMode 'total', cursor = a stat triple
+// (max mtime + messages.json size + max ctime) across the session's files —
+// stat-only, so discovery never parses the transcript; same-mtime rewrites
+// change one of the other two components.
 //
 // Projection: assistant text and thinking blocks become separate message
 // records (kimi's content.part style), tool calls/results ride the assistant
@@ -83,25 +84,16 @@ function contentBlocks(content: unknown): JsonRecord[] {
 
 function cursorFor(metaPath: string, messagesPath: string): Exclude<Cursor, null> | null {
   let maxMtime = 0;
-  let totalSize = 0;
+  let size = 0;
   let ctime = 0;
-  let messageCount = 0;
   for (const path of [metaPath, messagesPath]) {
     if (!existsSync(path)) return null;
     const stat = statSync(path);
     maxMtime = Math.max(maxMtime, stat.mtimeMs);
     ctime = Math.max(ctime, stat.ctimeMs);
-    if (path === messagesPath) {
-      totalSize = stat.size;
-      try {
-        const parsed = JSON.parse(readFileSync(path, 'utf8')) as JsonRecord;
-        messageCount = Array.isArray(parsed?.messages) ? parsed.messages.length : 0;
-      } catch {
-        messageCount = 0; // torn write: size participates in the cursor anyway
-      }
-    }
+    if (path === messagesPath) size = stat.size;
   }
-  return `${maxMtime}:${totalSize}:${ctime}:${messageCount}`;
+  return `${maxMtime}:${size}:${ctime}`;
 }
 
 // Strips the "<user_input mode=...>…</user_input>" wrapper around the first
@@ -173,6 +165,10 @@ function projectSession(
   const messages = Array.isArray(transcript.messages) ? transcript.messages : [];
   // tool call id → record uuid that carries the call; tool results attach here.
   const callOwnerUuids = new Map<string, string>();
+  // Last message record uuid of the previous message: the parent chain must
+  // cross message boundaries (tool_result carrier messages between them do
+  // not emit message records and stay out of the chain).
+  let previousMessageUuid: string | null = null;
   let visibleCount = 0;
   let firstTs: number | null = null;
   let lastTs: number | null = null;
@@ -225,6 +221,10 @@ function projectSession(
     const thinkingBlocks = blocks.filter((block) => block.type === 'thinking' && typeof block.thinking === 'string');
     const toolUses = blocks.filter((block) => block.type === 'tool_use' && typeof block.id === 'string');
 
+    // Within one message the blocks chain onto each other (text follows
+    // thinking); the first record chains to the previous message's last
+    // record, keeping one connected parent chain across the whole session.
+    let previousUuid: string | null = previousMessageUuid;
     const emit = (text: string, contentType: string, index: number): string => {
       const uuid = `${baseUuid}:b${index}`;
       records.push({
@@ -232,7 +232,7 @@ function projectSession(
         uuid,
         session_id: sessionId,
         type: role,
-        parent_uuid: null,
+        parent_uuid: previousUuid,
         timestamp,
         role,
         text: trunc(text),
@@ -248,6 +248,7 @@ function projectSession(
         skill: null,
         source: SOURCE,
       });
+      previousUuid = uuid;
       return uuid;
     };
 
@@ -295,14 +296,7 @@ function projectSession(
     // Real user messages can mix text with tool_result blocks; project the
     // results so the matching call renders with its output.
     emitToolResults(toolResults, primaryUuid);
-  }
-
-  for (let index = 1; index < records.length; index++) {
-    if (records[index]!.kind === 'message') {
-      const previous = records[index - 1]!;
-      (records[index] as { parent_uuid: string | null }).parent_uuid
-        = previous.kind === 'message' ? previous.uuid : null;
-    }
+    previousMessageUuid = primaryUuid;
   }
 
   records.push({
