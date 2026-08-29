@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -256,4 +256,56 @@ test('qoder provider reports a non-directory install', () => {
   assert.equal(issues.length, 1);
   assert.equal(issues[0].path, join(home, '.qoder-cn'));
   assert.match(issues[0].error, /not a directory/i);
+});
+
+test('qoder changedPaths routing emits only the touched session', () => {
+  const { root } = stageFixtureHome('obelisk-qoder-routing-');
+  const provider = createQoderProvider({ rootDir: root });
+  const all = provider.discover({ lastCursor: () => null });
+  const smallUnit = all.find((unit) => unit.sessionId === `qoder:${SMALL}`);
+
+  const changed = provider.discover({
+    lastCursor: () => null,
+    changedPaths: [smallUnit.meta.jsonlPath],
+  });
+  assert.deepEqual(changed.map((unit) => unit.sessionId), [`qoder:${SMALL}`]);
+});
+
+test('qoder changed-mode still skips sessions whose cursor is unchanged', () => {
+  const { root } = stageFixtureHome('obelisk-qoder-changed-');
+  const provider = createQoderProvider({ rootDir: root });
+  const all = provider.discover({ lastCursor: () => null });
+  const smallUnit = all.find((unit) => unit.sessionId === `qoder:${SMALL}`);
+  const cursors = new Map(all.map((unit) => [unit.key, unit.meta.currentCursor]));
+
+  // Append one line to the small transcript only.
+  const line = JSON.stringify({
+    type: 'user', uuid: 'test-appended-line', timestamp: '2026-08-29T12:00:00.000Z',
+    isSidechain: false, cwd: smallUnit.meta.cwd,
+    message: { role: 'user', content: [{ type: 'text', text: 'appended line' }] },
+  });
+  appendFileSync(smallUnit.meta.jsonlPath, line + '\n');
+
+  const changed = provider.discover({
+    lastCursor: (key) => cursors.get(key) ?? null,
+    changedPaths: [smallUnit.meta.jsonlPath],
+  });
+  assert.deepEqual(changed.map((unit) => unit.sessionId), [`qoder:${SMALL}`],
+    'the touched session re-indexes; siblings with unchanged cursors are skipped');
+});
+
+test('qoder parse throws when the GUI db row changes after discovery', () => {
+  const { home, root } = stageFixtureHome('obelisk-qoder-stale-db-');
+  const provider = createQoderProvider({ rootDir: root });
+  const unit = provider.discover({ lastCursor: () => null })
+    .find((candidate) => candidate.sessionId === `qoder:${SMALL}`);
+
+  const db = new DatabaseSync(cnDbPath(home));
+  db.prepare('UPDATE chat_sessions SET title = ?, updated_at = updated_at + 1000 WHERE session_id = ?')
+    .run('renamed after discovery', SMALL);
+  db.close();
+
+  // The end-of-parse guard recomputes the db half of the cursor and fails the
+  // snapshot, so a stale title can never be persisted as up-to-date.
+  assert.throws(() => drain(provider.parse(unit, null)), /changed while indexing/);
 });

@@ -79,6 +79,7 @@ const SKIP_LINE_TYPES = new Set([
 interface QoderSessionUnitMeta {
   readonly kind: 'session';
   readonly jsonlPath: string;
+  readonly dbPath: string;
   readonly sessionDir: string;
   readonly nativeId: string;
   readonly title: string | null;
@@ -475,23 +476,29 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
           if (!dbKnown.has(nativeId)) liveNativeIds.add(nativeId);
         }
 
-        const changedTargets = [normalize(installDir), normalize(dbPath)];
-        const installChanged = ctx.changedPaths !== undefined
-          && changedPathsTouch(rootDir, ctx.changedPaths, changedTargets);
+        // Only a GUI-database event re-scan touches every session of the
+        // install; transcript events are routed per session below.
+        const dbTouched = ctx.changedPaths !== undefined
+          && changedPathsTouch(rootDir, ctx.changedPaths, [normalize(dbPath)]);
         for (const nativeId of liveNativeIds) {
           const jsonlPath = jsonlBySession.get(nativeId)
             ?? (dbLiveNativeIds.has(nativeId) ? findTranscript(projectsDir, nativeId) : null);
           if (jsonlPath === null) continue;
-          if (ctx.changedPaths !== undefined && !installChanged) {
-            const transcriptTouched = changedPathsTouch(rootDir, ctx.changedPaths, [normalize(jsonlPath)]);
-            if (!transcriptTouched) continue;
-          }
           const info = dbKnown.get(nativeId);
           const cursor = cursorFor(dbUpdatedAt(info), jsonlPath);
           if (cursor === null) continue;
           const sessionId = namespacedSessionId(nativeId);
           const key = jsonlPath;
-          if (ctx.changedPaths === undefined && ctx.lastCursor(key) === cursor) continue;
+          // Cursor check runs in every mode: a watch event on one transcript
+          // must not re-parse every sibling session of the install.
+          if (ctx.lastCursor(key) === cursor) continue;
+          if (ctx.changedPaths !== undefined && !dbTouched) {
+            const touched = changedPathsTouch(rootDir, ctx.changedPaths, [
+              normalize(jsonlPath),
+              normalize(join(dirname(jsonlPath), nativeId)),
+            ]);
+            if (!touched) continue;
+          }
           units.push({
             key,
             sessionId,
@@ -499,6 +506,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
             meta: {
               kind: 'session',
               jsonlPath,
+              dbPath,
               sessionDir: join(dirname(jsonlPath), nativeId),
               nativeId,
               title: info?.title ?? null,
@@ -594,7 +602,10 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
         jsonl_path: meta.jsonlPath,
         source: SOURCE,
       };
-      const after = cursorFor(meta.dbUpdatedAt, meta.jsonlPath);
+      const after = cursorFor(
+        readSessions(meta.dbPath)?.get(meta.nativeId)?.updated_at ?? meta.dbUpdatedAt,
+        meta.jsonlPath,
+      );
       if (after !== meta.currentCursor) {
         throw new Error(`Qoder session changed while indexing: ${meta.jsonlPath}`);
       }
