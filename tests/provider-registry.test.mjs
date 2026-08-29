@@ -8,13 +8,6 @@ import { join } from 'node:path';
 import { createProviderRegistry } from '../packages/core/src/providers/registry.ts';
 import { createBuiltinProviderRegistry } from '../packages/core/src/providers/builtins.ts';
 
-// Watch-target paths are built with node:path join, whose separator differs
-// by platform; normalize to '/' so the POSIX literals below assert everywhere.
-const withPosixPaths = (targets) => targets.map((target) => ({
-  ...target,
-  path: target.path.split(sep).join('/'),
-}));
-
 function fakeProvider(id, root) {
   return {
     name: id,
@@ -82,6 +75,7 @@ test('built-in provider registry exposes every source without caller-side branch
     kiro: '/sources/kiro',
     omp: '/sources/omp',
     pi: '/sources/pi',
+    qoder: '/sources/qoder',
     zcode: '/sources/zcode',
   });
 
@@ -96,6 +90,7 @@ test('built-in provider registry exposes every source without caller-side branch
     { id: 'kiro', name: 'Kiro' },
     { id: 'omp', name: 'OMP' },
     { id: 'pi', name: 'Pi' },
+    { id: 'qoder', name: 'Qoder' },
     { id: 'zcode', name: 'ZCode' },
   ]);
   assert.deepEqual(registry.watchTargets(), [
@@ -118,6 +113,10 @@ test('built-in provider registry exposes every source without caller-side branch
     { kind: 'file', path: join('/sources/kiro', 'data.sqlite3-wal') },
     { kind: 'tree', path: join('/sources/omp') },
     { kind: 'tree', path: join('/sources/pi') },
+    { kind: 'tree', path: join('/sources/qoder', 'projects') },
+    { kind: 'file', path: join('/sources', 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite') },
+    { kind: 'tree', path: join('/sources', '.qoder', 'projects') },
+    { kind: 'file', path: join('/sources', 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite-wal') },
     { kind: 'tree', path: join('/sources/cline', 'sessions') },
