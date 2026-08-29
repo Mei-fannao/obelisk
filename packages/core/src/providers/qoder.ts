@@ -1,7 +1,7 @@
 // Copyright (C) 2026 tommy0103 and contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// Qoder provider adapter (see docs/adr/0001).
+// Qoder provider adapters (see docs/adr/0001).
 //
 // Qoder (Alibaba's agentic IDE) ships an agent SDK whose transcripts are
 // Claude-Code-style append-only JSONL under `~/.qoder[-cn]/projects/<cwd-slug>/
@@ -9,9 +9,15 @@
 // subagents/` directory (`task-*.json` manifest + `agent-*.jsonl`). Display
 // metadata (title, cwd, model, archived/deleted) lives in the GUI database
 // `<home>/AppData/Roaming/com.qoder[.cn|.app.stable]/main.sqlite`
-// (`chat_sessions`, epoch-ms timestamps). Both installs are scanned from one
-// provider: the unit is the session, keyed by its transcript path, full
-// snapshot per parse (cline's model) with the freshness guard from zcode.
+// (`chat_sessions`, epoch-ms timestamps).
+//
+// Two installs, two providers: `qoder-cn` (~/.qoder-cn) and `qoder`
+// (~/.qoder). Each is a home subdirectory, so the app's home-relocation of
+// provider defaults relocates the whole layout. Session ids share the
+// `qoder:<uuid>` namespace (UUIDs are globally unique); the `source` column
+// distinguishes the installs. The unit is the session, keyed by its
+// transcript path, full snapshot per parse (cline's model) with the freshness
+// guard from zcode.
 //
 // Projection: text/thinking blocks become separate message records, tool
 // calls/results ride the emitting record, user lines that carry ONLY
@@ -40,36 +46,48 @@ import type {
 
 type JsonRecord = Record<string, any>;
 
-const SOURCE = 'qoder';
 export const QODER_CANONICAL_TRANSCRIPT_MARKER = '__qoder_canonical_transcript_v1__';
 
-// Install layout derived from rootDir (= the CN install dir, e.g.
-// `~/.qoder-cn`): the intl install and both GUI databases sit relative to it
-// (`~/.qoder`, `~/AppData/Roaming/<appId>/main.sqlite`), so the app's
-// home-relocation of provider defaults relocates the whole layout together.
-interface QoderInstall {
-  readonly name: 'qoder-cn' | 'qoder';
-  readonly dir: string;
-  readonly db: string;
-  readonly primary: boolean;
+interface QoderInstallSpec {
+  readonly name: 'qoder' | 'qoder-cn';
+  readonly displayName: string;
+  readonly color: string;
+  readonly appId: string;
+  readonly installDir: string;
+  readonly dbPath: string;
 }
 
-function installLayouts(rootDir: string): QoderInstall[] {
-  const home = dirname(rootDir);
-  return [
-    {
-      name: 'qoder-cn',
-      dir: rootDir,
-      db: join(home, 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite'),
-      primary: true,
-    },
-    {
-      name: 'qoder',
-      dir: join(home, '.qoder'),
-      db: join(home, 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite'),
-      primary: false,
-    },
-  ];
+function qoderCnInstall(): QoderInstallSpec {
+  return {
+    name: 'qoder-cn',
+    displayName: 'Qoder CN',
+    color: '#e0533d',
+    appId: 'com.qodercn.app.stable',
+    installDir: join(homedir(), '.qoder-cn'),
+    dbPath: join(homedir(), 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite'),
+  };
+}
+
+function qoderIntlInstall(): QoderInstallSpec {
+  return {
+    name: 'qoder',
+    displayName: 'Qoder',
+    color: '#2e8b57',
+    appId: 'com.qoder.app.stable',
+    installDir: join(homedir(), '.qoder'),
+    dbPath: join(homedir(), 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite'),
+  };
+}
+
+// Tests relocate the install to a temp home; the GUI db follows as a sibling
+// AppData path so the whole layout moves together.
+function withRoot(base: QoderInstallSpec, rootDir?: string): QoderInstallSpec {
+  if (!rootDir) return base;
+  return {
+    ...base,
+    installDir: rootDir,
+    dbPath: join(dirname(rootDir), 'AppData', 'Roaming', base.appId, 'main.sqlite'),
+  };
 }
 
 const SKIP_LINE_TYPES = new Set([
@@ -87,14 +105,6 @@ interface QoderSessionUnitMeta {
   readonly model: string | null;
   readonly dbUpdatedAt: number | null;
   readonly currentCursor: Exclude<Cursor, null>;
-}
-
-interface QoderTombstoneUnitMeta {
-  readonly kind: 'tombstone';
-}
-
-function defaultQoderRoot(): string {
-  return join(homedir(), '.qoder-cn');
 }
 
 function namespacedSessionId(nativeId: string): string {
@@ -212,6 +222,7 @@ function findTranscript(projectsDir: string, nativeId: string): string | null {
 }
 
 function* projectTranscript(
+  recordSource: string,
   transcriptPath: string,
   sessionId: string,
   nativeId: string,
@@ -297,7 +308,7 @@ function* projectTranscript(
         output_tokens: index === 0 && typeof usage?.output_tokens === 'number' ? usage.output_tokens : null,
         cwd,
         skill: null,
-        source: SOURCE,
+        source: recordSource,
       });
       return uuid;
     };
@@ -388,16 +399,19 @@ function changedPathsTouch(root: string, changedPaths: readonly string[], target
   return false;
 }
 
-export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?: string } = {}): ProviderAdapter {
-  const name = SOURCE;
+export function createQoderInstallProvider(spec: QoderInstallSpec): ProviderAdapter {
+  const name = spec.name;
   return {
     name,
-    descriptor: { id: name, name: 'Qoder', vendor: 'Alibaba', defaultRoot: rootDir, color: '#e0533d' },
+    descriptor: { id: name, name: spec.displayName, vendor: 'Alibaba', defaultRoot: spec.installDir, color: spec.color },
     indexVersionMarker: QODER_CANONICAL_TRANSCRIPT_MARKER,
-    watchTargets: (configuredRoot) => installLayouts(configuredRoot).flatMap(({ dir, db }) => [
-      { kind: 'tree' as const, path: join(dir, 'projects') },
-      { kind: 'file' as const, path: db },
-    ]),
+    watchTargets: (configuredRoot) => {
+      void configuredRoot;
+      return [
+        { kind: 'tree' as const, path: join(spec.installDir, 'projects') },
+        { kind: 'file' as const, path: spec.dbPath },
+      ];
+    },
     discover(ctx: DiscoverContext): IndexUnit[] {
       const indexedNativeIds = new Set(
         (ctx.indexedSessions?.() ?? [])
@@ -407,31 +421,44 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
       const units: IndexUnit[] = [];
       const liveNativeIds = new Set<string>();
       let inventoryComplete = true;
-      let reportedFirstMissing = false;
 
-      for (const install of installLayouts(rootDir)) {
-        const installDir = install.dir;
-        let installState: 'missing' | 'not-directory' | 'directory';
-        try {
-          installState = statSync(installDir).isDirectory() ? 'directory' : 'not-directory';
-        } catch {
-          installState = 'missing';
+      const installDir = spec.installDir;
+      const dbPath = spec.dbPath;
+      let installState: 'missing' | 'not-directory' | 'directory';
+      try {
+        installState = statSync(installDir).isDirectory() ? 'directory' : 'not-directory';
+      } catch {
+        installState = 'missing';
+      }
+      if (installState !== 'directory') {
+        if (installState === 'not-directory') {
+          inventoryComplete = false;
+          ctx.reportIncompleteInventory?.({ path: installDir, error: 'Source path is not a directory' });
+        } else if ((ctx.indexedSessions?.().length ?? 0) > 0) {
+          // Convention: a missing source is an issue only when sessions were
+          // previously indexed.
+          inventoryComplete = false;
+          ctx.reportIncompleteInventory?.({ path: installDir, error: 'Source folder is unavailable' });
         }
-        if (installState !== 'directory') {
-          if (installState === 'not-directory') {
-            inventoryComplete = false;
-            ctx.reportIncompleteInventory?.({ path: installDir, error: 'Source path is not a directory' });
-          } else if (install.primary && !reportedFirstMissing && (ctx.indexedSessions?.().length ?? 0) > 0) {
-            // Convention: a missing source is an issue only when sessions were
-            // previously indexed, and only the primary install reports it.
-            inventoryComplete = false;
-            ctx.reportIncompleteInventory?.({ path: installDir, error: 'Source folder is unavailable' });
-            reportedFirstMissing = true;
-          }
-          continue;
+      } else {
+        discoverInstall();
+      }
+      if (inventoryComplete) {
+        for (const nativeId of indexedNativeIds) {
+          if (liveNativeIds.has(nativeId)) continue;
+          const sessionId = namespacedSessionId(nativeId);
+          units.push({
+            key: `${dbPath}#${sessionId}`,
+            sessionId,
+            retractSessionIds: [sessionId],
+            meta: { kind: 'tombstone' },
+          });
         }
+      }
+      return units;
+
+      function discoverInstall() {
         const projectsDir = join(installDir, 'projects');
-        const dbPath = install.db;
         const sessions = existsSync(dbPath) ? readSessions(dbPath) : null;
         if (sessions === null && existsSync(dbPath)) {
           inventoryComplete = false;
@@ -452,7 +479,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
           } catch (error) {
             inventoryComplete = false;
             ctx.reportIncompleteInventory?.(sourceInventoryIssue(projectsDir, error));
-            continue;
+            return;
           }
           for (const slug of slugs) {
             const slugDir = join(projectsDir, slug);
@@ -479,7 +506,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
         // Only a GUI-database event re-scan touches every session of the
         // install; transcript events are routed per session below.
         const dbTouched = ctx.changedPaths !== undefined
-          && changedPathsTouch(rootDir, ctx.changedPaths, [normalize(dbPath)]);
+          && changedPathsTouch(installDir, ctx.changedPaths, [normalize(dbPath)]);
         for (const nativeId of liveNativeIds) {
           const jsonlPath = jsonlBySession.get(nativeId)
             ?? (dbLiveNativeIds.has(nativeId) ? findTranscript(projectsDir, nativeId) : null);
@@ -493,7 +520,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
           // must not re-parse every sibling session of the install.
           if (ctx.lastCursor(key) === cursor) continue;
           if (ctx.changedPaths !== undefined && !dbTouched) {
-            const touched = changedPathsTouch(rootDir, ctx.changedPaths, [
+            const touched = changedPathsTouch(installDir, ctx.changedPaths, [
               normalize(jsonlPath),
               normalize(join(dirname(jsonlPath), nativeId)),
             ]);
@@ -518,19 +545,6 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
           });
         }
       }
-      if (inventoryComplete) {
-        for (const nativeId of indexedNativeIds) {
-          if (liveNativeIds.has(nativeId)) continue;
-          const sessionId = namespacedSessionId(nativeId);
-          units.push({
-            key: `${rootDir}#${sessionId}`,
-            sessionId,
-            retractSessionIds: [sessionId],
-            meta: { kind: 'tombstone' },
-          });
-        }
-      }
-      return units;
     },
     *parse(unit: IndexUnit, _cursor: Cursor): Generator<TranscriptRecord, Cursor> {
       const meta = unit.meta as QoderSessionUnitMeta | { kind: 'tombstone' };
@@ -541,7 +555,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
       }
       yield { kind: 'delete-session', sessionId: unit.sessionId };
 
-      const main = yield* projectTranscript(meta.jsonlPath, unit.sessionId, meta.nativeId, null);
+      const main = yield* projectTranscript(name, meta.jsonlPath, unit.sessionId, meta.nativeId, null);
 
       // Subagent transcripts fold into the parent session; the task manifest
       // carries the real parent tool call.
@@ -562,6 +576,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
           const agentTranscript = join(subagentsDir, `agent-${agentId}.jsonl`);
           if (!existsSync(agentTranscript)) continue;
           const child = yield* projectTranscript(
+            name,
             agentTranscript,
             unit.sessionId,
             meta.nativeId,
@@ -600,7 +615,7 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
         message_count: main.visibleCount,
         countMode: 'total',
         jsonl_path: meta.jsonlPath,
-        source: SOURCE,
+        source: name,
       };
       const after = cursorFor(
         readSessions(meta.dbPath)?.get(meta.nativeId)?.updated_at ?? meta.dbUpdatedAt,
@@ -633,4 +648,10 @@ export function createQoderProvider({ rootDir = defaultQoderRoot() }: { rootDir?
   };
 }
 
-export const qoderProvider = createQoderProvider();
+export function createQoderCnProvider({ rootDir }: { rootDir?: string } = {}): ProviderAdapter {
+  return createQoderInstallProvider(withRoot(qoderCnInstall(), rootDir));
+}
+
+export function createQoderProvider({ rootDir }: { rootDir?: string } = {}): ProviderAdapter {
+  return createQoderInstallProvider(withRoot(qoderIntlInstall(), rootDir));
+}

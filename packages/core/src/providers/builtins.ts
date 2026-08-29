@@ -11,7 +11,7 @@ import { createKimiProvider } from './kimi.ts';
 import { createKiroProvider, type KiroDatabaseOpener } from './kiro.ts';
 import { createOmpProvider } from './omp.ts';
 import { createPiProvider } from './pi.ts';
-import { createQoderProvider } from './qoder.ts';
+import { createQoderCnProvider, createQoderProvider } from './qoder.ts';
 import { createZcodeProvider, type ZcodeDatabaseOpener } from './zcode.ts';
 import { createProviderRegistry, type ProviderRegistry } from './registry.ts';
 
@@ -47,6 +47,7 @@ export function createBuiltinProviderRegistry(
     createOmpProvider({ rootDir: roots['omp'] }),
     createPiProvider({ rootDir: roots['pi'], cwd }),
     createQoderProvider({ rootDir: roots['qoder'] }),
+    createQoderCnProvider({ rootDir: roots['qoder-cn'] }),
     createZcodeProvider({ rootDir: roots['zcode'], openDatabase: openZcodeDatabase }),
   ]);
 }

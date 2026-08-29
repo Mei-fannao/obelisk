@@ -76,6 +76,7 @@ test('built-in provider registry exposes every source without caller-side branch
     omp: '/sources/omp',
     pi: '/sources/pi',
     qoder: '/sources/qoder',
+    'qoder-cn': '/sources/qoder-cn',
     zcode: '/sources/zcode',
   });
 
@@ -91,6 +92,7 @@ test('built-in provider registry exposes every source without caller-side branch
     { id: 'omp', name: 'OMP' },
     { id: 'pi', name: 'Pi' },
     { id: 'qoder', name: 'Qoder' },
+    { id: 'qoder-cn', name: 'Qoder CN' },
     { id: 'zcode', name: 'ZCode' },
   ]);
   assert.deepEqual(registry.watchTargets(), [
@@ -114,9 +116,9 @@ test('built-in provider registry exposes every source without caller-side branch
     { kind: 'tree', path: join('/sources/omp') },
     { kind: 'tree', path: join('/sources/pi') },
     { kind: 'tree', path: join('/sources/qoder', 'projects') },
-    { kind: 'file', path: join('/sources', 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite') },
-    { kind: 'tree', path: join('/sources', '.qoder', 'projects') },
     { kind: 'file', path: join('/sources', 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite') },
+    { kind: 'tree', path: join('/sources/qoder-cn', 'projects') },
+    { kind: 'file', path: join('/sources', 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite-wal') },
     { kind: 'tree', path: join('/sources/cline', 'sessions') },
