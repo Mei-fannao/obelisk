@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createClaudeProvider } from './claude.ts';
+import { createClineProvider } from './cline.ts';
 import { createCodexProvider } from './codex.ts';
 import { createCopilotProvider, type CopilotChronicleOpener } from './copilot.ts';
 import { createDeepseekProvider } from './deepseek.ts';
@@ -35,6 +36,7 @@ export function createBuiltinProviderRegistry(
 ): ProviderRegistry {
   return createProviderRegistry([
     createClaudeProvider({ rootDir: roots['claude'] }),
+    createClineProvider({ rootDir: roots['cline'] }),
     createCodexProvider({ rootDir: roots['codex'] }),
     createCopilotProvider({ rootDir: roots['copilot'], userDataRoots: copilotUserDataRoots, openChronicle: openCopilotChronicle }),
     createDeepseekProvider({ rootDir: roots['deepseek'] }),

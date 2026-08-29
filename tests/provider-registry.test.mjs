@@ -8,6 +8,13 @@ import { join } from 'node:path';
 import { createProviderRegistry } from '../packages/core/src/providers/registry.ts';
 import { createBuiltinProviderRegistry } from '../packages/core/src/providers/builtins.ts';
 
+// Watch-target paths are built with node:path join, whose separator differs
+// by platform; normalize to '/' so the POSIX literals below assert everywhere.
+const withPosixPaths = (targets) => targets.map((target) => ({
+  ...target,
+  path: target.path.split(sep).join('/'),
+}));
+
 function fakeProvider(id, root) {
   return {
     name: id,
@@ -66,6 +73,7 @@ test('provider registry drives source catalog, watch roots, and raw lookup', () 
 test('built-in provider registry exposes every source without caller-side branching', () => {
   const registry = createBuiltinProviderRegistry({
     claude: '/sources/claude',
+    cline: '/sources/cline',
     codex: '/sources/codex',
     copilot: '/sources/copilot',
     deepseek: '/sources/deepseek',
@@ -79,6 +87,7 @@ test('built-in provider registry exposes every source without caller-side branch
 
   assert.deepEqual(registry.catalog().map(({ id, name }) => ({ id, name })), [
     { id: 'claude', name: 'Claude Code' },
+    { id: 'cline', name: 'Cline' },
     { id: 'codex', name: 'Codex' },
     { id: 'copilot', name: 'GitHub Copilot' },
     { id: 'deepseek', name: 'DeepSeek Harness' },
@@ -111,5 +120,6 @@ test('built-in provider registry exposes every source without caller-side branch
     { kind: 'tree', path: join('/sources/pi') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite-wal') },
+    { kind: 'tree', path: join('/sources/cline', 'sessions') },
   ]);
 });
