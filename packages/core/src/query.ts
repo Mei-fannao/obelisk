@@ -1076,7 +1076,7 @@ function createAttuneApi(db: SqliteDb, runMutation: <T>(work: () => T) => T = (w
     assertEnglishMemoryText(summary, 'remember() summary');
     const normalizedPath = resolveMemoryPath(memoryPath, session_id);
     const normalizedAnchors = normalizeAnchors(anchors);
-    const proj = project || db.prepare('SELECT project FROM sessions WHERE id=?').get(session_id)?.project || null;
+    const proj = project || db.prepare('SELECT project FROM sessions WHERE id=?').get(session_id ?? null)?.project || null;
     const created_at = new Date().toISOString();
     // Plain INSERT, never OR REPLACE: a memory id must not silently overwrite
     // an existing memory. Collisions regenerate instead of losing data.
