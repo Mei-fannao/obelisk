@@ -1076,7 +1076,21 @@ function createAttuneApi(db: SqliteDb, runMutation: <T>(work: () => T) => T = (w
     assertEnglishMemoryText(summary, 'remember() summary');
     const normalizedPath = resolveMemoryPath(memoryPath, session_id);
     const normalizedAnchors = normalizeAnchors(anchors);
-    const proj = project || db.prepare('SELECT project FROM sessions WHERE id=?').get(session_id ?? null)?.project || null;
+    // Unknown sessions (see ADR 0008 for why session identity must be
+    // traceable) must not silently land as project-less rows: callers either
+    // pass project explicitly or point at a session that exists in this index.
+    const expectedProject =
+      typeof project === 'string' && project.length > 0 ? project : null;
+    const sessionRow: { project?: string | null } | undefined = session_id == null
+      ? undefined
+      : (db.prepare('SELECT project FROM sessions WHERE id=?').get(session_id) as { project?: string | null } | undefined);
+    if (session_id != null && sessionRow === undefined) {
+      throw new Error('remember() session_id does not match any session in this index');
+    }
+    const proj = expectedProject ?? sessionRow?.project ?? null;
+    if (proj === null && session_id == null) {
+      throw new Error('remember() requires project when session_id is omitted');
+    }
     const created_at = new Date().toISOString();
     // Plain INSERT, never OR REPLACE: a memory id must not silently overwrite
     // an existing memory. Collisions regenerate instead of losing data.
@@ -1086,6 +1100,19 @@ function createAttuneApi(db: SqliteDb, runMutation: <T>(work: () => T) => T = (w
         try {
           db.prepare('INSERT INTO memories (id, session_id, project, message_start, message_end, path, anchors, summary, created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(
             id, session_id || null, proj, message_start || null, message_end || null, normalizedPath, normalizedAnchors, summary, created_at);
+          // The INSERT above can succeed against a deviant memories table
+          // (e.g. id without a PRIMARY KEY) that the pre-write layer checks
+          // were built to reject. Read the row back under the same retryable
+          // transaction: exactly one row must exist, and id must be the sole
+          // primary-key column. Violation means the fix cannot trust the
+          // store, so roll the whole mutation back with a clear error.
+          const rows = db.prepare('SELECT id FROM memories WHERE id=?').all(id) as { id: string }[];
+          const shape = db.prepare('PRAGMA table_info(memories)').all() as { name: string; pk: number }[];
+          const pkColumns = shape.filter((column) => Number(column.pk ?? 0) > 0).map((column) => column.name);
+          if (rows.length !== 1 || !(pkColumns.length === 1 && pkColumns[0] === 'id')) {
+            db.prepare('DELETE FROM memories WHERE id=?').run(id);
+            throw new Error('remember() refused: memory store lost id uniqueness');
+          }
           return;
         } catch (error) {
           // Primary-key collision: regenerate the id and retry. Any other
