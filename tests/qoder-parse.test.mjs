@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { createQoderCnProvider, createQoderProvider } from '../packages/core/src/providers/qoder.ts';
 import { assembleSessionDetail } from '../packages/core/src/session-detail.ts';
 import { persist } from '../packages/core/src/persist.ts';
+import { createProviderRegistry } from '../packages/core/src/providers/registry.ts';
 import { makeTempDir } from './temp-dirs.mjs';
 
 const SCHEMA = readFileSync(new URL('../packages/core/src/schema.sql', import.meta.url), 'utf8');
@@ -46,9 +47,13 @@ function cnDbPath(home) {
   return join(home, 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite');
 }
 
+function intlDbPath(home) {
+  return join(home, 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite');
+}
+
 test('qoder-cn discovers its sessions with stable cursors', () => {
-  const { cnRoot } = stageFixtureHome('obelisk-qodercn-discover-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-discover-');
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const units = provider.discover({ lastCursor: () => null });
 
   assert.deepEqual(units.map((unit) => unit.sessionId).sort(), [`qoder:${RICH}`, `qoder:${SMALL}`]);
@@ -74,8 +79,8 @@ test('qoder (intl) discovers only the intl install and stays isolated from qoder
 });
 
 test('qoder-cn projects the rich session with tools and folds the Plan subagent', () => {
-  const { cnRoot } = stageFixtureHome('obelisk-qodercn-parse-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-parse-');
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const unit = provider.discover({ lastCursor: () => null })
     .find((candidate) => candidate.sessionId === `qoder:${RICH}`);
   const { values, ret } = drain(provider.parse(unit, null));
@@ -127,8 +132,8 @@ test('qoder-cn projects the rich session with tools and folds the Plan subagent'
 });
 
 test('qoder-cn canonical records survive a persist round trip (ADR-0007)', () => {
-  const { cnRoot } = stageFixtureHome('obelisk-qodercn-roundtrip-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-roundtrip-');
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const smallId = `qoder:${SMALL}`;
   const records = [];
   for (const unit of provider.discover({ lastCursor: () => null })) {
@@ -169,7 +174,7 @@ test('qoder (intl) projects its session with db metadata', () => {
 
 test('qoder-cn retracts a session deleted from the GUI database', () => {
   const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-tombstone-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
 
   const db = new DatabaseSync(':memory:');
   db.exec(SCHEMA);
@@ -196,7 +201,7 @@ test('qoder-cn retracts a session deleted from the GUI database', () => {
 test('qoder-cn degrades gracefully when its GUI database is unreadable', () => {
   const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-corrupt-');
   writeFileSync(cnDbPath(home), 'this is not a sqlite database');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
 
   const issues = [];
   // Transcripts remain the presence truth: sessions still index (with null
@@ -214,8 +219,8 @@ test('qoder-cn degrades gracefully when its GUI database is unreadable', () => {
 });
 
 test('qoder-cn raw lookup replays a transcript line by its uuid', () => {
-  const { cnRoot } = stageFixtureHome('obelisk-qodercn-raw-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-raw-');
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const unit = provider.discover({ lastCursor: () => null })
     .find((candidate) => candidate.sessionId === `qoder:${SMALL}`);
   const { values } = drain(provider.parse(unit, null));
@@ -268,8 +273,8 @@ test('qoder-cn reports a non-directory install', () => {
 });
 
 test('qoder-cn changedPaths routing emits only the touched session', () => {
-  const { cnRoot } = stageFixtureHome('obelisk-qodercn-routing-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-routing-');
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const all = provider.discover({ lastCursor: () => null });
   const smallUnit = all.find((unit) => unit.sessionId === `qoder:${SMALL}`);
 
@@ -281,8 +286,8 @@ test('qoder-cn changedPaths routing emits only the touched session', () => {
 });
 
 test('qoder-cn changed-mode still skips sessions whose cursor is unchanged', () => {
-  const { cnRoot } = stageFixtureHome('obelisk-qodercn-changed-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-changed-');
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const all = provider.discover({ lastCursor: () => null });
   const smallUnit = all.find((unit) => unit.sessionId === `qoder:${SMALL}`);
   const cursors = new Map(all.map((unit) => [unit.key, unit.meta.currentCursor]));
@@ -305,7 +310,7 @@ test('qoder-cn changed-mode still skips sessions whose cursor is unchanged', () 
 
 test('qoder-cn parse throws when the GUI db row changes after discovery', () => {
   const { home, cnRoot } = stageFixtureHome('obelisk-qodercn-stale-db-');
-  const provider = createQoderCnProvider({ rootDir: cnRoot });
+  const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
   const unit = provider.discover({ lastCursor: () => null })
     .find((candidate) => candidate.sessionId === `qoder:${SMALL}`);
 
@@ -317,4 +322,82 @@ test('qoder-cn parse throws when the GUI db row changes after discovery', () => 
   // The end-of-parse guard recomputes the db half of the cursor and fails the
   // snapshot, so a stale title can never be persisted as up-to-date.
   assert.throws(() => drain(provider.parse(unit, null)), /changed while indexing/);
+});
+
+test('qoder (intl) retracts a session deleted from its GUI database', () => {
+  const { home, intlRoot } = stageFixtureHome('obelisk-qoder-intl-tomb-');
+  const provider = createQoderProvider({ rootDir: intlRoot, dbPath: intlDbPath(home) });
+
+  const db = new DatabaseSync(':memory:');
+  db.exec(SCHEMA);
+  const units = provider.discover({ lastCursor: () => null });
+  for (const unit of units) persist(db, unit, provider.parse(unit, null));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 1);
+
+  const remove = new DatabaseSync(intlDbPath(home));
+  remove.prepare('UPDATE chat_sessions SET deleted_at = ? WHERE session_id = ?').run(Date.now(), INTL);
+  remove.close();
+
+  const after = provider.discover({
+    lastCursor: () => null,
+    indexedSessions: () => db.prepare('SELECT id, jsonl_path FROM sessions').all()
+      .map((row) => ({ sessionId: row.id, jsonlPath: row.jsonl_path })),
+  });
+  const tombstone = after.find((unit) => unit.sessionId === `qoder:${INTL}`);
+  assert.deepEqual(tombstone.retractSessionIds, [`qoder:${INTL}`]);
+  persist(db, tombstone, provider.parse(tombstone, null));
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n, 0);
+  db.close();
+});
+
+test('registry raw lookup dispatches by session source across the split providers', () => {
+  const { home, cnRoot, intlRoot } = stageFixtureHome('obelisk-qoder-rawdispatch-');
+  const registry = createProviderRegistry([
+    createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) }),
+    createQoderProvider({ rootDir: intlRoot, dbPath: intlDbPath(home) }),
+  ]);
+
+  const cnAssistant = drain((() => {
+    const provider = createQoderCnProvider({ rootDir: cnRoot, dbPath: cnDbPath(home) });
+    const unit = provider.discover({ lastCursor: () => null })
+      .find((candidate) => candidate.sessionId === `qoder:${SMALL}`);
+    return provider.parse(unit, null);
+  })()).values.find((record) => record.kind === 'message' && record.role === 'assistant');
+  const intlAssistant = drain((() => {
+    const provider = createQoderProvider({ rootDir: intlRoot, dbPath: intlDbPath(home) });
+    const unit = provider.discover({ lastCursor: () => null })[0];
+    return provider.parse(unit, null);
+  })()).values.find((record) => record.kind === 'message' && record.role === 'assistant');
+
+  const cnRaw = registry.raw({
+    source: 'qoder-cn', messageUuid: cnAssistant.uuid,
+    session: { id: cnAssistant.session_id, jsonl_path: unit_jsonl(join(cnRoot, 'projects'), SMALL) }, agentId: null,
+  });
+  assert.equal(cnRaw.messageText, cnAssistant.text);
+  const intlRaw = registry.raw({
+    source: 'qoder', messageUuid: intlAssistant.uuid,
+    session: { id: intlAssistant.session_id, jsonl_path: unit_jsonl(join(intlRoot, 'projects'), INTL) }, agentId: null,
+  });
+  assert.equal(intlRaw.messageText, intlAssistant.text);
+});
+
+function unit_jsonl(projectsDir, sessionId) {
+  for (const slug of readdirSync(projectsDir)) {
+    const candidate = join(projectsDir, slug, `${sessionId}.jsonl`);
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`transcript not found: ${sessionId}`);
+}
+
+test('qoder (intl) changedPaths routing emits only the touched session', () => {
+  const { home, intlRoot } = stageFixtureHome('obelisk-qoder-intl-routing-');
+  const provider = createQoderProvider({ rootDir: intlRoot, dbPath: intlDbPath(home) });
+  const all = provider.discover({ lastCursor: () => null });
+  const intlUnit = all.find((unit) => unit.sessionId === `qoder:${INTL}`);
+
+  const changed = provider.discover({
+    lastCursor: () => null,
+    changedPaths: [intlUnit.meta.jsonlPath],
+  });
+  assert.deepEqual(changed.map((unit) => unit.sessionId), [`qoder:${INTL}`]);
 });

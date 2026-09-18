@@ -79,15 +79,18 @@ function qoderIntlInstall(): QoderInstallSpec {
   };
 }
 
-// Tests relocate the install to a temp home; the GUI db follows as a sibling
-// AppData path so the whole layout moves together.
-function withRoot(base: QoderInstallSpec, rootDir?: string): QoderInstallSpec {
-  if (!rootDir) return base;
-  return {
-    ...base,
-    installDir: rootDir,
-    dbPath: join(dirname(rootDir), 'AppData', 'Roaming', base.appId, 'main.sqlite'),
-  };
+// Tests relocate the install by passing both rootDir and dbPath together.
+// A rootDir-only override (settings UI) also derives the db from the new
+// root's sibling AppData — if that db is not there the provider degrades
+// gracefully (null titles, tombstones suppressed), never a crash.
+function withRoot(base: QoderInstallSpec, overrides: { rootDir?: string; dbPath?: string } = {}): QoderInstallSpec {
+  if (!overrides.rootDir && !overrides.dbPath) return base;
+  const installDir = overrides.rootDir ?? base.installDir;
+  const dbPath = overrides.dbPath
+    ?? (overrides.rootDir
+      ? join(dirname(overrides.rootDir), 'AppData', 'Roaming', base.appId, 'main.sqlite')
+      : base.dbPath);
+  return { ...base, installDir, dbPath };
 }
 
 const SKIP_LINE_TYPES = new Set([
@@ -310,6 +313,7 @@ function* projectTranscript(
         skill: null,
         source: recordSource,
       });
+      previousUuid = uuid;
       return uuid;
     };
 
@@ -322,7 +326,13 @@ function* projectTranscript(
         primaryUuid = emit(block.text, 'text', emitted++);
       }
     }
-    if (primaryUuid === null) primaryUuid = emit('', 'tool_use', 0);
+    if (primaryUuid === null) {
+      // A line with nothing renderable contributes no records at all; a
+      // tool-use-only line still needs its visible anchor record.
+      const hasToolUse = blocks.some((block) => block.type === 'tool_use' && typeof block.id === 'string');
+      if (!hasToolUse && toolResults.length === 0) continue;
+      primaryUuid = emit('', 'tool_use', 0);
+    }
     if (isSidechain === 0) visibleCount += 1;
     totalTokens += (inputUsage(usage) ?? 0) + (typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0);
 
@@ -354,7 +364,6 @@ function* projectTranscript(
         });
       }
     }
-    previousUuid = primaryUuid;
   }
   yield* records;
   return { firstTs, lastTs, visibleCount, totalTokens };
@@ -648,10 +657,10 @@ export function createQoderInstallProvider(spec: QoderInstallSpec): ProviderAdap
   };
 }
 
-export function createQoderCnProvider({ rootDir }: { rootDir?: string } = {}): ProviderAdapter {
-  return createQoderInstallProvider(withRoot(qoderCnInstall(), rootDir));
+export function createQoderCnProvider(overrides: { rootDir?: string; dbPath?: string } = {}): ProviderAdapter {
+  return createQoderInstallProvider(withRoot(qoderCnInstall(), overrides));
 }
 
-export function createQoderProvider({ rootDir }: { rootDir?: string } = {}): ProviderAdapter {
-  return createQoderInstallProvider(withRoot(qoderIntlInstall(), rootDir));
+export function createQoderProvider(overrides: { rootDir?: string; dbPath?: string } = {}): ProviderAdapter {
+  return createQoderInstallProvider(withRoot(qoderIntlInstall(), overrides));
 }
