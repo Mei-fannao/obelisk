@@ -1,0 +1,47 @@
+{
+ "version": 1,
+ "updated_at": "2026-08-27T03:39:51.232Z",
+ "agent": "lead",
+ "sessionId": "1787801982963_3fnb7",
+ "origin": {
+  "source": "cli",
+  "mode": "user",
+  "sessionId": "1787801982963_3fnb7",
+  "version": "3.0.60"
+ },
+ "messages": [
+  {
+   "id": "msg_mtaz56st_3",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "<user_input mode=\"plan\">say only the word: ok</user_input>"
+    }
+   ],
+   "ts": 1787801988269
+  },
+  {
+   "id": "msg_oukxDua0",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "ok"
+    }
+   ],
+   "ts": 1787801990993,
+   "modelInfo": {
+    "id": "MiniMaxAI/MiniMax-M3",
+    "provider": "openai-compatible"
+   },
+   "metrics": {
+    "inputTokens": 5502,
+    "outputTokens": 1,
+    "cacheReadTokens": 133,
+    "cacheWriteTokens": 0
+   }
+  }
+ ],
+ "system_prompt": "[system_prompt sanitized: 6008 chars]"
+}

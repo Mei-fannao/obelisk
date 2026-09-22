@@ -1,0 +1,56 @@
+{
+ "version": 1,
+ "session_id": "1787801982963_3fnb7",
+ "source": "cli",
+ "pid": 1535,
+ "started_at": "2026-08-27T03:39:44.007Z",
+ "ended_at": "2026-08-27T03:39:51.259Z",
+ "exit_code": 0,
+ "status": "completed",
+ "interactive": false,
+ "provider": "openai-compatible",
+ "model": "MiniMaxAI/MiniMax-M3",
+ "cwd": "/tmp",
+ "workspace_root": "/tmp",
+ "team_name": "team-Dt_rU",
+ "enable_tools": true,
+ "enable_spawn": true,
+ "enable_teams": true,
+ "prompt": "<user_input mode=\"plan\">say only the word: ok</user_input>",
+ "metadata": {
+  "sessionHistoryOrigin": {
+   "mode": "user",
+   "version": "3.0.60"
+  },
+  "source": "cli",
+  "provider": "openai-compatible",
+  "model": "MiniMaxAI/MiniMax-M3",
+  "enableTools": true,
+  "enableSpawn": true,
+  "enableTeams": true,
+  "prompt": "say only the word: ok",
+  "interactive": false,
+  "mode": "plan",
+  "systemPrompt": "You are Cline, an AI coding agent. Your primary goal is to assist users with various coding tasks by leveraging your knowledge and the tools at your disposal. Given the user's prompt, you should use the tools available to you to answer user…[truncated]",
+  "checkpointEnabled": true,
+  "autoApproveTools": false,
+  "title": "say only the word: ok",
+  "totalCost": 0,
+  "aggregatedAgentsCost": 0,
+  "usage": {
+   "inputTokens": 5502,
+   "outputTokens": 1,
+   "cacheReadTokens": 133,
+   "cacheWriteTokens": 0,
+   "totalCost": 0
+  },
+  "aggregateUsage": {
+   "inputTokens": 5502,
+   "outputTokens": 1,
+   "cacheReadTokens": 133,
+   "cacheWriteTokens": 0,
+   "totalCost": 0
+  }
+ },
+ "messages_path": "/home/user/.cline/data/sessions/1787801982963_3fnb7/1787801982963_3fnb7.messages.json"
+}

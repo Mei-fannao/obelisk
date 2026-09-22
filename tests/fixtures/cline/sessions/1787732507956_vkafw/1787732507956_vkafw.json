@@ -1,0 +1,44 @@
+{
+ "version": 1,
+ "session_id": "1787732507956_vkafw",
+ "source": "cli",
+ "pid": 436,
+ "started_at": "2026-08-26T08:21:47.960Z",
+ "ended_at": "2026-08-26T08:24:40.900Z",
+ "exit_code": 0,
+ "status": "cancelled",
+ "interactive": true,
+ "provider": "cline",
+ "model": "stealth/ox-alpha",
+ "cwd": "/home/user",
+ "workspace_root": "/home/user",
+ "team_name": "team-BWGlK",
+ "enable_tools": true,
+ "enable_spawn": true,
+ "enable_teams": true,
+ "prompt": "<user_input mode=\"act\">/update</user_input>",
+ "metadata": {
+  "sessionHistoryOrigin": {
+   "mode": "user",
+   "version": "3.0.58"
+  },
+  "title": "/update",
+  "totalCost": 0,
+  "aggregatedAgentsCost": 0,
+  "usage": {
+   "inputTokens": 31193,
+   "outputTokens": 560,
+   "cacheReadTokens": 19392,
+   "cacheWriteTokens": 0,
+   "totalCost": 0
+  },
+  "aggregateUsage": {
+   "inputTokens": 31193,
+   "outputTokens": 560,
+   "cacheReadTokens": 19392,
+   "cacheWriteTokens": 0,
+   "totalCost": 0
+  }
+ },
+ "messages_path": "/home/user/.cline/data/sessions/1787732507956_vkafw/1787732507956_vkafw.messages.json"
+}

@@ -1,0 +1,19 @@
+{
+ "taskId": "a3fab6bdcdec44c9c",
+ "sessionId": "4b757031-4888-4f81-a7b6-13381d54ca11",
+ "executionId": 2000000001,
+ "agentId": "aPlan-8e8d0184bb853bcd",
+ "agentType": "Plan",
+ "description": "评审 Vault 重构设计",
+ "invocationName": "Plan",
+ "parentToolUseId": "call_d6d39477240543d0bc157c79",
+ "outputPath": "C:\\Temp\\qoder-cli-cn\\C--Users----Documents-Qoder-2026-08-27-4b757031\\4b757031-4888-4f81-a7b6-13381d54ca11\\tasks\\a3fab6bdcdec44c9c.output",
+ "transcriptPath": "C:\\Users\\user\\.qoder-cn\\projects\\C--Users----Documents-Qoder-2026-08-27-4b757031\\4b757031-4888-4f81-a7b6-13381d54ca11\\subagents\\agent-aPlan-8e8d0184bb853bcd.jsonl",
+ "completionBehavior": "notify",
+ "status": "completed",
+ "summary": "Agent \"Plan\" finished",
+ "createdAt": 1787835154852,
+ "updatedAt": 1787835475453,
+ "result": "[result sanitized: 5453 chars]",
+ "completedAt": 1787835475451
+}
