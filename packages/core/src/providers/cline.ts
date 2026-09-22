@@ -9,10 +9,10 @@
 // text / thinking / tool_use / tool_result / image). Structurally the Kimi
 // shape — one directory per session, aggregate cursor, full reparse — so the
 // kimi.ts patterns apply: unit key = session directory, snapshot parse with a
-// delete-session head and countMode 'total', cursor = a stat triple
-// (max mtime + messages.json size + max ctime) across the session's files —
-// stat-only, so discovery never parses the transcript; same-mtime rewrites
-// change one of the other two components.
+// delete-session head and countMode 'total', cursor = a stat quadruple
+// (max mtime + messages.json size + max ctime + max ino) across the session's
+// files — stat-only, so discovery never parses the transcript; same-mtime
+// rewrites change one of the other three components.
 //
 // Projection: assistant text and thinking blocks become separate message
 // records (kimi's content.part style), tool calls/results ride the assistant
@@ -86,14 +86,16 @@ function cursorFor(metaPath: string, messagesPath: string): Exclude<Cursor, null
   let maxMtime = 0;
   let size = 0;
   let ctime = 0;
+  let ino = 0;
   for (const path of [metaPath, messagesPath]) {
     if (!existsSync(path)) return null;
     const stat = statSync(path);
     maxMtime = Math.max(maxMtime, stat.mtimeMs);
     ctime = Math.max(ctime, stat.ctimeMs);
+    ino = Math.max(ino, stat.ino);
     if (path === messagesPath) size = stat.size;
   }
-  return `${maxMtime}:${size}:${ctime}`;
+  return `${maxMtime}:${size}:${ctime}:${ino}`;
 }
 
 // Strips the "<user_input mode=...>…</user_input>" wrapper around the first

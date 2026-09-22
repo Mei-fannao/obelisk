@@ -49,7 +49,6 @@ class SqliteCompatDatabase {
 // relative to the main module's directory) and mock that URL. Relative deps are
 // resolved against the main module URL directly.
 const mainUrl = new URL('../app/src/main/index.ts', import.meta.url);
-const mainPath = fileURLToPath(mainUrl);
 const mainDir = fileURLToPath(new URL('.', mainUrl));
 
 function esmResolve(specifier) {
@@ -342,6 +341,7 @@ test('main process watches every root declared by the built-in provider registry
     assert.deepEqual(serviceOptions[0].watchTargets, [
       { kind: 'tree', path: join(claudeDir, 'projects') },
       { kind: 'file', path: join(claudeDir, 'history.jsonl') },
+      { kind: 'tree', path: join(home, '.cline', 'data', 'sessions') },
       { kind: 'tree', path: join(codexDir, 'sessions') },
       { kind: 'tree', path: join(codexDir, 'archived_sessions') },
       { kind: 'file', path: join(codexDir, 'session_index.jsonl') },
@@ -362,6 +362,10 @@ test('main process watches every root declared by the built-in provider registry
       { kind: 'file', path: `${defaultKiroDatabasePath({ homeDir: home })}-wal` },
       { kind: 'tree', path: join(home, '.omp', 'agent', 'sessions') },
       { kind: 'tree', path: join(home, '.pi', 'agent', 'sessions') },
+      { kind: 'tree', path: join(home, '.qoder', 'projects') },
+      { kind: 'file', path: join(home, 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite') },
+      { kind: 'tree', path: join(home, '.qoder-cn', 'projects') },
+      { kind: 'file', path: join(home, 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite') },
       { kind: 'file', path: join(home, '.zcode', 'cli', 'db', 'db.sqlite') },
       { kind: 'file', path: join(home, '.zcode', 'cli', 'db', 'db.sqlite-wal') },
     ]);

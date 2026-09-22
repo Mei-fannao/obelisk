@@ -29,7 +29,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, normalize, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, normalize, sep } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { filePath, projectSlugFromPath, sourceInventoryIssue, trunc, truncJson } from '../parsing.ts';
@@ -166,7 +166,7 @@ interface InstallDbInfo {
 }
 
 function readSessions(dbPath: string): Map<string, InstallDbInfo> | null {
-  let db: DatabaseSync | null = null;
+  let db: DatabaseSync;
   try {
     db = new DatabaseSync(dbPath, { readOnly: true });
   } catch {
@@ -187,7 +187,7 @@ function readSessions(dbPath: string): Map<string, InstallDbInfo> | null {
   } catch {
     return null; // torn/corrupt database: fail closed, report incomplete
   } finally {
-    db?.close();
+    db.close();
   }
 }
 
@@ -195,10 +195,10 @@ function dbUpdatedAt(info: InstallDbInfo | undefined): number | null {
   return info?.updated_at ?? null;
 }
 
-function transcriptStat(jsonlPath: string): { mtimeMs: number; size: number } | null {
+function transcriptStat(jsonlPath: string): { mtimeMs: number; size: number; ino: number } | null {
   try {
     const stat = statSync(jsonlPath);
-    return { mtimeMs: stat.mtimeMs, size: stat.size };
+    return { mtimeMs: stat.mtimeMs, size: stat.size, ino: stat.ino };
   } catch {
     return null;
   }
@@ -207,7 +207,7 @@ function transcriptStat(jsonlPath: string): { mtimeMs: number; size: number } | 
 function cursorFor(dbUpdated: number | null, jsonlPath: string): Exclude<Cursor, null> | null {
   const stat = transcriptStat(jsonlPath);
   if (stat === null) return null;
-  return `${dbUpdated ?? 0}:${stat.mtimeMs}:${stat.size}`;
+  return `${dbUpdated ?? 0}:${stat.mtimeMs}:${stat.size}:${stat.ino}`;
 }
 
 function findTranscript(projectsDir: string, nativeId: string): string | null {
