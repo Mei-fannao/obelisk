@@ -1,0 +1,346 @@
+{
+ "version": 1,
+ "updated_at": "2026-08-23T05:34:46.240Z",
+ "conversation_id": "1787458927083_fgec4",
+ "source_message_count": 109,
+ "source_prefix_hash": "sha256:12879fa019318ab0b665ed9883c8fc6e6a3a4cd595c361cc3b59209a2b699f8a",
+ "source_last_message_key": "id:msg_mt5dhi9w_1nb",
+ "messages": [
+  {
+   "id": "msg_mt5aw74t_3",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "<user_input mode=\"act\">你是否有全局agent.md的文件？</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 255 chars]"
+    }
+   ],
+   "ts": 1787458927133,
+   "metadata": {
+    "kind": "compaction",
+    "reason": "auto_compaction",
+    "displayRole": "system",
+    "messagesRemoved": 90,
+    "usageBefore": {
+     "inputTokens": 1797275,
+     "outputTokens": 42610,
+     "cacheReadTokens": 1517760,
+     "cacheWriteTokens": 0,
+     "cost": 0
+    },
+    "userRunSpan": 1
+   }
+  },
+  {
+   "id": "msg_uEUzc4hv",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 628 chars]"
+    }
+   ],
+   "ts": 1787458953119,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5ay4wg_8",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 194 chars]"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 545 chars]"
+    }
+   ],
+   "ts": 1787459017552
+  },
+  {
+   "id": "msg_9B202vTn",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 822 chars]"
+    }
+   ],
+   "ts": 1787459788380,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5bfrt3_1x",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "<user_input mode=\"plan\">把之前6月6号安装的正式版卸载了，然后只用今天安装的这个就可以了。</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "<user_input mode=\"act\">The user approved switching to act mode. Continue with the approved plan now.</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 1116 chars]"
+    }
+   ],
+   "ts": 1787459840391,
+   "metadata": {
+    "userRunSpan": 1
+   }
+  },
+  {
+   "id": "msg_0HsMYXwv",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 987 chars]"
+    }
+   ],
+   "ts": 1787460059920,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5blcum_bb",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "<user_input mode=\"act\">继续</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 223 chars]"
+    }
+   ],
+   "ts": 1787460100942
+  },
+  {
+   "id": "msg_RpJVemqh",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 559 chars]"
+    }
+   ],
+   "ts": 1787460196911,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5bte3n_1",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "<user_input mode=\"plan\">wezterm重新打开后，它又弹出了一个弹窗，包括它还是之前的cmd.exe。[Image 1] [Image 2]</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 689 chars]"
+    }
+   ],
+   "ts": 1787460475811
+  },
+  {
+   "id": "msg_TAiqvaFD",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 1009 chars]"
+    }
+   ],
+   "ts": 1787460765492,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5c022m_ci",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 180 chars]"
+    },
+    {
+     "type": "text",
+     "text": "<user_input mode=\"act\">The user approved switching to act mode. Continue with the approved plan now.</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 420 chars]"
+    }
+   ],
+   "ts": 1787460786814,
+   "metadata": {
+    "userRunSpan": 1
+   }
+  },
+  {
+   "id": "msg_8Y3m_D0j",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 892 chars]"
+    }
+   ],
+   "ts": 1787460977360,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5c60uy_sk",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "<user_input mode=\"act\">会弹出一个选项卡：Default: C:Users\\user\\scoop\\shims\\wezterm.exe\nctrl+alt+1</user_input>"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 365 chars]"
+    }
+   ],
+   "ts": 1787461065178
+  },
+  {
+   "id": "msg_fWpftnCE",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 670 chars]"
+    }
+   ],
+   "ts": 1787461379957,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5cev9k_14e",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 221 chars]"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 469 chars]"
+    }
+   ],
+   "ts": 1787461477832
+  },
+  {
+   "id": "msg_H7JEIPmM",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 618 chars]"
+    }
+   ],
+   "ts": 1787461814684,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5cvn0l_1hm",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 788 chars]"
+    },
+    {
+     "type": "text",
+     "text": "[text sanitized: 428 chars]"
+    }
+   ],
+   "ts": 1787462260293
+  },
+  {
+   "id": "msg_AWRwj_fk",
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 1509 chars]"
+    }
+   ],
+   "ts": 1787462397339,
+   "metadata": {
+    "compaction": "preserved"
+   },
+   "modelInfo": {
+    "id": "stealth/ox-alpha",
+    "provider": "cline"
+   }
+  },
+  {
+   "id": "msg_mt5dhi9w_1nb",
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "[text sanitized: 288 chars]"
+    }
+   ],
+   "ts": 1787463280580
+  }
+ ]
+}

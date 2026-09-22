@@ -1,0 +1,48 @@
+{
+ "version": 1,
+ "session_id": "1787458927083_fgec4",
+ "source": "cli",
+ "pid": 5076,
+ "started_at": "2026-08-23T04:22:07.083Z",
+ "ended_at": "2026-08-23T06:49:17.288Z",
+ "exit_code": 1,
+ "status": "failed",
+ "interactive": true,
+ "provider": "cline",
+ "model": "stealth/ox-alpha",
+ "cwd": "/home/user",
+ "workspace_root": "/home/user",
+ "team_name": "team-7lE_4",
+ "enable_tools": true,
+ "enable_spawn": true,
+ "enable_teams": true,
+ "prompt": "<user_input mode=\"act\">你是否有全局agent.md的文件？</user_input>",
+ "metadata": {
+  "sessionHistoryOrigin": {
+   "mode": "user",
+   "version": "3.0.57"
+  },
+  "title": "你是否有全局agent.md的文件？",
+  "totalCost": 0,
+  "aggregatedAgentsCost": 0,
+  "usage": {
+   "inputTokens": 3531041,
+   "outputTokens": 69709,
+   "cacheReadTokens": 2930048,
+   "cacheWriteTokens": 0,
+   "totalCost": 0
+  },
+  "aggregateUsage": {
+   "inputTokens": 3531041,
+   "outputTokens": 69709,
+   "cacheReadTokens": 2930048,
+   "cacheWriteTokens": 0,
+   "totalCost": 0
+  },
+  "terminal_marker": "failed_external_process_exit",
+  "terminal_marker_at": "2026-08-23T06:49:17.288Z",
+  "terminal_marker_pid": 5076,
+  "terminal_marker_source": "stale_session_reconciler"
+ },
+ "messages_path": "/home/user/.cline/data/sessions/1787458927083_fgec4/1787458927083_fgec4.messages.json"
+}

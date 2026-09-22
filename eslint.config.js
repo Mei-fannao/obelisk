@@ -16,6 +16,7 @@ export default tseslint.config(
       'node_modules/**',
       'app/**',
       'dist/**',
+      'packages/*/dist/**',
       'release/**',
       '.dev.docs/**',
       '.obelisk/**',
