@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createClaudeProvider } from '../packages/core/src/providers/claude.ts';
+import { createClineProvider } from '../packages/core/src/providers/cline.ts';
 import { createCodexProvider } from '../packages/core/src/providers/codex.ts';
 import { createKimiProvider } from '../packages/core/src/providers/kimi.ts';
 import { createZcodeProvider } from '../packages/core/src/providers/zcode.ts';
@@ -15,6 +16,7 @@ import { makeTempDir } from './temp-dirs.mjs';
 
 const providers = [
   ['claude', createClaudeProvider, 'projects'],
+  ['cline', createClineProvider, 'sessions'],
   ['codex', createCodexProvider, 'sessions'],
   ['kimi', createKimiProvider, 'sessions'],
 ];

@@ -3,10 +3,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
+import { sep } from 'node:path';
 
 import { createProviderRegistry } from '../packages/core/src/providers/registry.ts';
 import { createBuiltinProviderRegistry } from '../packages/core/src/providers/builtins.ts';
+
+// Watch-target paths are built with node:path join, whose separator differs
+// by platform; normalize to '/' so the POSIX literals below assert everywhere.
+const withPosixPaths = (targets) => targets.map((target) => ({
+  ...target,
+  path: target.path.split(sep).join('/'),
+}));
 
 function fakeProvider(id, root) {
   return {
@@ -66,6 +73,7 @@ test('provider registry drives source catalog, watch roots, and raw lookup', () 
 test('built-in provider registry exposes every source without caller-side branching', () => {
   const registry = createBuiltinProviderRegistry({
     claude: '/sources/claude',
+    cline: '/sources/cline',
     codex: '/sources/codex',
     copilot: '/sources/copilot',
     deepseek: '/sources/deepseek',
@@ -73,11 +81,14 @@ test('built-in provider registry exposes every source without caller-side branch
     kimi: '/sources/kimi',
     omp: '/sources/omp',
     pi: '/sources/pi',
+    qoder: '/sources/qoder',
+    'qoder-cn': '/sources/qoder-cn',
     zcode: '/sources/zcode',
   });
 
   assert.deepEqual(registry.catalog().map(({ id, name }) => ({ id, name })), [
     { id: 'claude', name: 'Claude Code' },
+    { id: 'cline', name: 'Cline' },
     { id: 'codex', name: 'Codex' },
     { id: 'copilot', name: 'GitHub Copilot' },
     { id: 'deepseek', name: 'DeepSeek Harness' },
@@ -85,26 +96,33 @@ test('built-in provider registry exposes every source without caller-side branch
     { id: 'kimi', name: 'Kimi Code' },
     { id: 'omp', name: 'OMP' },
     { id: 'pi', name: 'Pi' },
+    { id: 'qoder', name: 'Qoder' },
+    { id: 'qoder-cn', name: 'Qoder CN' },
     { id: 'zcode', name: 'ZCode' },
   ]);
-  assert.deepEqual(registry.watchTargets(), [
-    { kind: 'tree', path: join('/sources/claude', 'projects') },
-    { kind: 'file', path: join('/sources/claude', 'history.jsonl') },
-    { kind: 'tree', path: join('/sources/codex', 'sessions') },
-    { kind: 'tree', path: join('/sources/codex', 'archived_sessions') },
-    { kind: 'file', path: join('/sources/codex', 'session_index.jsonl') },
-    { kind: 'file', path: join('/sources/copilot', 'globalStorage', 'github.copilot-chat', 'session-store.db') },
-    { kind: 'file', path: join('/sources/copilot', 'globalStorage', 'github.copilot-chat', 'session-store.db-wal') },
-    { kind: 'tree', path: join('/sources/copilot', 'workspaceStorage') },
+  assert.deepEqual(withPosixPaths(registry.watchTargets()), [
+    { kind: 'tree', path: '/sources/claude/projects' },
+    { kind: 'file', path: '/sources/claude/history.jsonl' },
+    { kind: 'tree', path: '/sources/cline/sessions' },
+    { kind: 'tree', path: '/sources/codex/sessions' },
+    { kind: 'tree', path: '/sources/codex/archived_sessions' },
+    { kind: 'file', path: '/sources/codex/session_index.jsonl' },
+    { kind: 'file', path: '/sources/copilot/globalStorage/github.copilot-chat/session-store.db' },
+    { kind: 'file', path: '/sources/copilot/globalStorage/github.copilot-chat/session-store.db-wal' },
+    { kind: 'tree', path: '/sources/copilot/workspaceStorage' },
     { kind: 'tree', path: '/sources/deepseek' },
-    { kind: 'file', path: join('/sources/hermes', 'state.db') },
-    { kind: 'file', path: join('/sources/hermes', 'state.db-wal') },
-    { kind: 'tree', path: join('/sources/hermes', 'profiles'), fileNames: ['state.db', 'state.db-wal'] },
-    { kind: 'tree', path: join('/sources/kimi', 'sessions') },
-    { kind: 'file', path: join('/sources/kimi', 'session_index.jsonl') },
-    { kind: 'tree', path: join('/sources/omp') },
-    { kind: 'tree', path: join('/sources/pi') },
-    { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite') },
-    { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite-wal') },
+    { kind: 'file', path: '/sources/hermes/state.db' },
+    { kind: 'file', path: '/sources/hermes/state.db-wal' },
+    { kind: 'tree', path: '/sources/hermes/profiles', fileNames: ['state.db', 'state.db-wal'] },
+    { kind: 'tree', path: '/sources/kimi/sessions' },
+    { kind: 'file', path: '/sources/kimi/session_index.jsonl' },
+    { kind: 'tree', path: '/sources/omp' },
+    { kind: 'tree', path: '/sources/pi' },
+    { kind: 'tree', path: '/sources/qoder/projects' },
+    { kind: 'file', path: '/sources/AppData/Roaming/com.qoder.app.stable/main.sqlite' },
+    { kind: 'tree', path: '/sources/qoder-cn/projects' },
+    { kind: 'file', path: '/sources/AppData/Roaming/com.qodercn.app.stable/main.sqlite' },
+    { kind: 'file', path: '/sources/zcode/db/db.sqlite' },
+    { kind: 'file', path: '/sources/zcode/db/db.sqlite-wal' },
   ]);
 });
