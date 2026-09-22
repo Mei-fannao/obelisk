@@ -48,7 +48,7 @@ test('cline provider discovers fixture session directories with stable cursors',
   );
   for (const unit of units) {
     assert.equal(unit.key, join(root, 'sessions', unit.sessionId.slice('cline:'.length)));
-    assert.match(unit.meta.currentCursor, /^\d+(\.\d+)?:\d+:\d+(\.\d+)?$/);
+    assert.match(unit.meta.currentCursor, /^\d+(\.\d+)?:\d+:\d+(\.\d+)?:\d+$/);
   }
 
   const unchanged = provider.discover({
@@ -76,7 +76,7 @@ test('cline provider projects content blocks, tool calls, and results into canon
     {
       id: `cline:${RICH}`,
       title: '你是否有全局agent.md的文件？',
-      project: '-home-jinyu',
+      project: '-home-user',
       countMode: 'total',
       source: 'cline',
       message_count: 122,

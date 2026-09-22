@@ -15,7 +15,7 @@
 // Long human-readable strings are sanitized; structure, roles, tool names,
 // statuses, timestamps and usage numbers are preserved verbatim.
 
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -31,6 +31,7 @@ const outRoot = join(fixtureDir, 'home');
 
 const SMALL_SESSION = '7094e97f-ccd9-446a-aa8a-0de882144280'; // complete session, CN
 const BIG_SESSION = '4b757031-4888-4f81-a7b6-13381d54ca11'; // owns a real subagent, CN
+const INTL_SESSION = '322d97de-3389-4b4f-9e5a-c1c9cbc99ded'; // single near-empty session, intl
 const KEEP = new Set([SMALL_SESSION, BIG_SESSION]);
 
 const SENSITIVE_KEYS = new Set(['text', 'thinking', 'input', 'content', 'response', 'result', 'prompt', 'title', 'lastPrompt', 'description']);
@@ -53,6 +54,54 @@ function sanitizeJson(value, key = '') {
   }
   return value;
 }
+// 兜底：对库内所有 TEXT 列做用户名替换，覆盖未单独建模的表/列，
+// 保证 schema 漂移或遗漏都不会把本机用户名带进 fixture。
+function textColumns(db, table) {
+  return db.prepare(`SELECT name, type FROM pragma_table_info('${table}')`).all()
+    .filter((col) => /TEXT|CHAR|CLOB/i.test(col.type ?? ''))
+    .map((col) => col.name);
+}
+
+function replaceUsernameEverywhere(db) {
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all()
+    .map((row) => row.name);
+  for (const table of tables) {
+    for (const column of textColumns(db, table)) {
+      db.prepare(`UPDATE "${table}" SET "${column}" = REPLACE("${column}", '联想', 'user') WHERE "${column}" LIKE '%联想%'`).run();
+    }
+  }
+  return tables;
+}
+
+// 自检：任何 TEXT 列仍残留本机用户名则构建失败（宁缺毋滥）。
+function assertNoUsername(db, tables) {
+  const leaks = [];
+  for (const table of tables) {
+    for (const column of textColumns(db, table)) {
+      const n = db.prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE "${column}" LIKE '%联想%'`).get().n;
+      if (n > 0) leaks.push(`${table}.${column}(${n})`);
+    }
+  }
+  if (leaks.length > 0) throw new Error(`fixture 仍残留本机用户名: ${leaks.join(', ')}`);
+}
+
+// 字节级兜底自检：BLOB 列（如 FTS5 影子表索引块）与非 UTF-8 编码残留都
+// 逃得过 SQL LIKE 与 TEXT 兜底；产物落盘后读文件 Buffer 按字节扫描，命中即
+// 中止构建。此前"全字节扫描 0 命中"的验证声明因 BLOB 漏检而失真，此处补齐。
+const LEAK_BYTES = [
+  ['联想/UTF-8', Buffer.from('联想', 'utf8')],
+  ['联想/GBK', Buffer.from([0xC1, 0xAA, 0xCF, 0xEB])],
+  ['联想/UTF-16LE', Buffer.from('联想', 'utf16le')],
+  ['jinyu/ASCII', Buffer.from('jinyu', 'ascii')],
+];
+function assertNoLeakBytes(filePath) {
+  const buf = readFileSync(filePath);
+  for (const [label, needle] of LEAK_BYTES) {
+    if (buf.includes(needle)) throw new Error(`fixture 字节级泄漏: ${label} in ${filePath}`);
+  }
+}
+
+
 
 rmSync(outRoot, { recursive: true, force: true });
 
@@ -139,27 +188,76 @@ function copyMainDb(installDir, appId, keepSessions) {
   // longer has a set rather than tracking the chain.
   try { db.exec('DELETE FROM turn_file_change_files'); } catch { /* absent */ }
   try { db.exec('DELETE FROM turn_file_change_patches'); } catch { /* absent */ }
-  for (const [table, column] of Object.entries({ chat_sessions: 'title', chat_sessions_cwd: 'cwd', chat_session_recaps: 'text', chat_session_search_segments: 'text' })) {
-    try {
-      const realTable = table.replace('_cwd', '');
-      const rows = db.prepare(`SELECT rowid, ${column} AS value FROM ${realTable}`).all();
-      const update = db.prepare(`UPDATE ${realTable} SET ${column} = ? WHERE rowid = ?`);
-      for (const row of rows) update.run(sanitizeString(column, row.value), row.rowid);
-    } catch { /* absent */ }
+  const knownTables = new Set(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((row) => row.name));
+  // 会话无关的安装级全局表可能携带账户 ID、工作区路径等 PII；
+  // 适配器与测试均不读取，整表清空（保留 schema）。
+  for (const table of [
+    'account_profiles', 'workspaces', 'app_settings',
+    'plugin_inventory_meta', 'plugin_inventory_installations', 'plugin_inventory_resources',
+    'marketplace_resource_bindings', 'extension_installations',
+    'scheduled_tasks', 'scheduled_task_run_logs', 'scheduled_task_settings',
+    // cn 库残留真实账户/环境/服务器标识的安装级全局表（intl 库这些表均为 0 行）
+    'partner_plan_snapshots', 'rc_ingress_environments', 'rc_identity_migrations',
+    'mcp_connection_profiles', 'mcp_marketplace_receipts', 'mcp_marketplace_receipt_entries',
+  ]) {
+    if (knownTables.has(table)) db.prepare(`DELETE FROM "${table}"`).run();
   }
-  try {
-    const rows = db.prepare('SELECT session_id, payload_json FROM chat_session_messages').all();
-    const update = db.prepare('UPDATE chat_session_messages SET payload_json = ? WHERE session_id = ? AND message_id = ?');
+  // 纯文本列：用户名替换 + 敏感键截断。表存在性显式判断，不再用 catch 吞错。
+  for (const [table, column] of [
+    ['chat_sessions', 'title'],
+    ['chat_sessions', 'cwd'],
+    ['chat_session_recaps', 'text'],
+    ['chat_session_search_segments', 'text'],
+    ['chat_session_highlights', 'description'],
+    ['chat_session_search_fts', 'normalized_text'],
+  ]) {
+    if (!knownTables.has(table)) continue;
+    // rowid 必须显式取别名：若表声明了 INTEGER PRIMARY KEY 列（如
+    // chat_session_search_segments.row_id），SELECT rowid 会以声明列名返回
+    const rows = db.prepare(`SELECT rowid AS ob_rowid, "${column}" AS value FROM "${table}"`).all();
+    const update = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`);
+    for (const row of rows) update.run(sanitizeString(column, row.value), row.ob_rowid);
+  }
+  // JSON 列：逐行结构化净化，rowid 定位。原实现 SELECT 漏取 message_id，
+  // 绑定 undefined 被外层 catch 静默吞掉，导致 payload 从未被净化。
+  for (const [table, column] of [
+    ['chat_session_messages', 'payload_json'],
+    ['chat_sessions', 'extra_json'],
+    ['chat_sessions', 'execution_target_json'],
+    ['scheduled_task_run_logs', 'task_snapshot_json'],
+    ['chat_session_highlights', 'items_json'],
+  ]) {
+    if (!knownTables.has(table)) continue;
+    const rows = db.prepare(`SELECT rowid AS ob_rowid, "${column}" AS value FROM "${table}"`).all();
+    const update = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`);
     for (const row of rows) {
-      update.run(JSON.stringify(sanitizeJson(JSON.parse(row.payload_json))), row.session_id, row.message_id);
+      if (typeof row.value !== 'string') continue;
+      try {
+        update.run(JSON.stringify(sanitizeJson(JSON.parse(row.value))), row.ob_rowid);
+      } catch {
+        // 非 JSON 内容：留给下面的兜底用户名替换
+      }
     }
-  } catch { /* absent */ }
+  }
+  const allTables = replaceUsernameEverywhere(db);
+  assertNoUsername(db, allTables);
+  // FTS5 影子表的 BLOB 索引块持有原词分词，TEXT 兜底与 SQL 自检都够不到；
+  // 外部内容 FTS 从已净化的 chat_session_search_segments 重建，放在 VACUUM 前。
+  if (knownTables.has('chat_session_search_fts')) {
+    db.exec("INSERT INTO chat_session_search_fts(chat_session_search_fts) VALUES('rebuild')");
+  }
   db.exec('VACUUM');
+  // 固化为 rollback journal：WAL 模式会在任何读取时生成 -shm/-wal 副车文件，
+  // 污染 fixture 目录（且可能被误提交）
+  db.exec('PRAGMA journal_mode=DELETE');
   db.close();
   const target = join(dbTargetDir, 'main.sqlite');
   rmSync(target, { force: true });
   cpSync(staging, target);
   rmSync(staging, { force: true });
+  // 清理 staging 的 WAL 副车（源库为 WAL 模式时生成）
+  rmSync(`${staging}-shm`, { force: true });
+  rmSync(`${staging}-wal`, { force: true });
   return true;
 }
 
@@ -170,20 +268,16 @@ const cnBig = copyTranscript('.qoder-cn', BIG_SESSION, 80);
 copySessionDir('.qoder-cn', BIG_SESSION, 30);
 copyMainDb('.qoder-cn', 'com.qodercn.app.stable', [SMALL_SESSION, BIG_SESSION]);
 
-// Intl install: keep whatever exists (a single near-empty session here).
-const intlSession = (() => {
-  const projects = join(home, '.qoder', 'projects');
-  if (!existsSync(projects)) return null;
-  for (const slug of readdirSync(projects)) {
-    for (const entry of readdirSync(join(projects, slug))) {
-      if (entry.endsWith('.jsonl')) return entry.slice(0, -'.jsonl'.length);
-    }
-  }
-  return null;
-})();
-if (intlSession !== null) {
-  copyTranscript('.qoder', intlSession);
-  copyMainDb('.qoder', 'com.qoder.app.stable', [intlSession]);
+// Intl install: pinned session (auto-pick would drift as the live install grows).
+if (findSessionFile('.qoder', INTL_SESSION) !== null) {
+  copyTranscript('.qoder', INTL_SESSION);
+  copyMainDb('.qoder', 'com.qoder.app.stable', [INTL_SESSION]);
+}
+
+// 字节级终检：覆盖 sqlite 产物与所有 JSONL 转录（BLOB 与非 UTF-8 编码兜底）
+for (const entry of readdirSync(outRoot, { recursive: true })) {
+  const p = join(outRoot, entry.toString());
+  if (statSync(p).isFile()) assertNoLeakBytes(p);
 }
 
 const check = new DatabaseSync(join(outRoot, 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite'), { readOnly: true });

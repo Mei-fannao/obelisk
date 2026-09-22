@@ -12,7 +12,7 @@
 // fixture. All long human-readable strings are sanitized; structure, tool
 // names, statuses, timestamps and path shapes are preserved verbatim.
 
-import { cpSync, rmSync } from 'node:fs';
+import { cpSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -55,8 +55,60 @@ function sanitizeJson(value, key = '') {
   return value;
 }
 
+// 兜底：对库内所有 TEXT 列做用户名替换，覆盖未单独建模的表/列
+// （session.directory/path、input_history.text、crafted child 行内的 cwd 等）。
+function textColumns(db, table) {
+  return db.prepare(`SELECT name, type FROM pragma_table_info('${table}')`).all()
+    .filter((col) => /TEXT|CHAR|CLOB/i.test(col.type ?? ''))
+    .map((col) => col.name);
+}
+
+function replaceUsernameEverywhere(db) {
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all()
+    .map((row) => row.name);
+  for (const table of tables) {
+    for (const column of textColumns(db, table)) {
+      db.prepare(`UPDATE "${table}" SET "${column}" = REPLACE("${column}", '联想', 'user') WHERE "${column}" LIKE '%联想%'`).run();
+    }
+  }
+  return tables;
+}
+
+// 自检：任何 TEXT 列仍残留本机用户名则构建失败（宁缺毋滥）。
+function assertNoUsername(db, tables) {
+  const leaks = [];
+  for (const table of tables) {
+    for (const column of textColumns(db, table)) {
+      const n = db.prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE "${column}" LIKE '%联想%'`).get().n;
+      if (n > 0) leaks.push(`${table}.${column}(${n})`);
+    }
+  }
+  if (leaks.length > 0) throw new Error(`fixture 仍残留本机用户名: ${leaks.join(', ')}`);
+}
+
+// 字节级兜底自检：BLOB 列与非 UTF-8 编码残留都逃得过 SQL LIKE；产物落盘后
+// 读文件 Buffer 按字节扫描，命中即中止构建（与 qoder/cline 脚本同一清单）。
+const LEAK_BYTES = [
+  ['联想/UTF-8', Buffer.from('联想', 'utf8')],
+  ['联想/GBK', Buffer.from([0xC1, 0xAA, 0xCF, 0xEB])],
+  ['联想/UTF-16LE', Buffer.from('联想', 'utf16le')],
+  ['jinyu/ASCII', Buffer.from('jinyu', 'ascii')],
+];
+function assertNoLeakBytes(filePath) {
+  const buf = readFileSync(filePath);
+  for (const [label, needle] of LEAK_BYTES) {
+    if (buf.includes(needle)) throw new Error(`fixture 字节级泄漏: ${label} in ${filePath}`);
+  }
+}
+
+
 rmSync(stagingPath, { force: true });
-cpSync(realDbPath, stagingPath);
+// 用 VACUUM INTO 从只读连接做一致性快照：活动库多为 WAL 模式，直接 cpSync
+// 主文件会丢 -wal 里的最新事务，拿到撕裂镜像（曾触发 "database disk image
+// is malformed"）。VACUUM INTO 在源库读事务内完成，且允许只读连接。
+const sourceDb = new DatabaseSync(realDbPath, { readOnly: true });
+sourceDb.exec(`VACUUM INTO '${stagingPath.replaceAll('\\', '/')}'`);
+sourceDb.close();
 const db = new DatabaseSync(stagingPath);
 
 const dropAllExcept = (table, column, keep) => {
@@ -151,11 +203,30 @@ for (const p of childParts) {
     .run(`part_fix_${p.message}_${p.seq}`, p.message, CRAFTED_CHILD, childBase.time_created, childBase.time_created, JSON.stringify(p.data), p.seq);
 }
 
+// input_history 等长文本按敏感键规则净化（crafted child 插入之后执行，顺带覆盖）
+// rowid 显式取别名，避免 INTEGER PRIMARY KEY 别名列改写结果键名
+for (const [table, column] of [['session', 'title'], ['input_history', 'text']]) {
+  const rows = db.prepare(`SELECT rowid AS ob_rowid, "${column}" AS value FROM "${table}"`).all();
+  const update = db.prepare(`UPDATE "${table}" SET "${column}" = ? WHERE rowid = ?`);
+  for (const row of rows) update.run(sanitizeString(column, row.value), row.ob_rowid);
+}
+const allTables = replaceUsernameEverywhere(db);
+assertNoUsername(db, allTables);
+
 db.exec('VACUUM');
+db.exec('VACUUM');
+// 固化为 rollback journal：WAL 模式会在任何读取时生成 -shm/-wal 副车文件，
+// 污染 fixture 目录（且可能被误提交）
+db.exec('PRAGMA journal_mode=DELETE');
 db.close();
 rmSync(fixturePath, { force: true });
 cpSync(stagingPath, fixturePath);
 rmSync(stagingPath, { force: true });
+// 清理 staging 的 WAL 副车（源库为 WAL 模式时生成）
+rmSync(`${stagingPath}-shm`, { force: true });
+rmSync(`${stagingPath}-wal`, { force: true });
+// 字节级终检：BLOB 与非 UTF-8 编码残留的兜底
+assertNoLeakBytes(fixturePath);
 
 const check = new DatabaseSync(fixturePath, { readOnly: true });
 console.log('fixture sessions:', check.prepare('SELECT id, task_type FROM session ORDER BY time_created').all());

@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
@@ -58,7 +58,7 @@ test('qoder-cn discovers its sessions with stable cursors', () => {
 
   assert.deepEqual(units.map((unit) => unit.sessionId).sort(), [`qoder:${RICH}`, `qoder:${SMALL}`]);
   for (const unit of units) {
-    assert.match(unit.meta.currentCursor, /^\d+:\d+(\.\d+)?:\d+$/);
+    assert.match(unit.meta.currentCursor, /^\d+:\d+(\.\d+)?:\d+:\d+$/);
   }
 
   const unchanged = provider.discover({

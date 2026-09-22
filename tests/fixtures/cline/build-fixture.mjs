@@ -37,7 +37,7 @@ const SENSITIVE_KEYS = new Set([
 
 function sanitizeString(key, value) {
   if (typeof value !== 'string') return value;
-  let out = value.replaceAll('联想', 'user');
+  let out = value.replaceAll('联想', 'user').replaceAll('/home/jinyu', '/home/user').replaceAll('jinyu', 'user');
   if (key === 'data') return '[image payload removed]';
   if (SENSITIVE_KEYS.has(key) && out.length > 120) out = `[${key} sanitized: ${out.length} chars]`;
   else if (out.length > 240) out = `${out.slice(0, 240)}…[truncated]`;
@@ -74,3 +74,32 @@ for (const sessionId of KEEP_SESSIONS) {
   }
   console.log(`fixture session: ${sessionId} -> ${targetDir} (${readdirSync(targetDir).join(', ')})`);
 }
+
+// 自检：fixture 不得残留 Windows/WSL 用户名（宁缺毋滥）
+for (const sessionId of KEEP_SESSIONS) {
+  for (const entry of readdirSync(join(outRoot, sessionId))) {
+    const text = readFileSync(join(outRoot, sessionId, entry), 'utf8');
+    if (text.includes('联想') || text.includes('jinyu')) {
+      throw new Error(`fixture 仍残留用户名: ${sessionId}/${entry}`);
+    }
+  }
+}
+
+// 字节级兜底自检：非 UTF-8 编码残留逃得过文本自检；读文件 Buffer 按字节
+// 扫描，命中即中止构建（与 qoder/zcode 脚本同一清单）。
+const LEAK_BYTES = [
+  ['联想/UTF-8', Buffer.from('联想', 'utf8')],
+  ['联想/GBK', Buffer.from([0xC1, 0xAA, 0xCF, 0xEB])],
+  ['联想/UTF-16LE', Buffer.from('联想', 'utf16le')],
+  ['jinyu/ASCII', Buffer.from('jinyu', 'ascii')],
+];
+for (const sessionId of KEEP_SESSIONS) {
+  for (const entry of readdirSync(join(outRoot, sessionId))) {
+    const filePath = join(outRoot, sessionId, entry);
+    const buf = readFileSync(filePath);
+    for (const [label, needle] of LEAK_BYTES) {
+      if (buf.includes(needle)) throw new Error(`fixture 字节级泄漏: ${label} in ${filePath}`);
+    }
+  }
+}
+
