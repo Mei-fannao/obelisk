@@ -348,6 +348,7 @@ test('main process watches every root declared by the built-in provider registry
       { kind: 'file', path: join(home, 'AppData', 'Roaming', 'com.qoder.app.stable', 'main.sqlite') },
       { kind: 'tree', path: join(home, '.qoder-cn', 'projects') },
       { kind: 'file', path: join(home, 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite') },
+      { kind: 'tree', path: join(home, '.stepcode', 'agent', 'sessions') },
       { kind: 'file', path: join(home, '.zcode', 'cli', 'db', 'db.sqlite') },
       { kind: 'file', path: join(home, '.zcode', 'cli', 'db', 'db.sqlite-wal') },
     ]);

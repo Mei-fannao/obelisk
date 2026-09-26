@@ -14,6 +14,9 @@ import { createKimiProvider } from '../packages/core/src/providers/kimi.ts';
 import { createZcodeProvider } from '../packages/core/src/providers/zcode.ts';
 import { makeTempDir } from './temp-dirs.mjs';
 
+// Pi-family providers (pi, stepcode) take the sessions directory itself as
+// their root, so they report raw filesystem errors instead of a normalized
+// "<root>/<subdir>" issue and are covered by their own suites instead.
 const providers = [
   ['claude', createClaudeProvider, 'projects'],
   ['cline', createClineProvider, 'sessions'],

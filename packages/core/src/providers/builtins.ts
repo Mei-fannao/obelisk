@@ -12,6 +12,7 @@ import { createOmpProvider } from './omp.ts';
 import { createPiProvider } from './pi.ts';
 import { createQoderCnProvider, createQoderProvider } from './qoder.ts';
 import { createProviderRegistry, type ProviderRegistry } from './registry.ts';
+import { createStepcodeProvider } from './stepcode.ts';
 import { createZcodeProvider, type ZcodeDatabaseOpener } from './zcode.ts';
 
 export type BuiltinProviderRoots = Readonly<Record<string, string | undefined>>;
@@ -42,6 +43,7 @@ export function createBuiltinProviderRegistry(
     createPiProvider({ rootDir: roots['pi'], cwd }),
     createQoderProvider({ rootDir: roots['qoder'] }),
     createQoderCnProvider({ rootDir: roots['qoder-cn'] }),
+    createStepcodeProvider({ rootDir: roots['stepcode'], cwd }),
     createZcodeProvider({ rootDir: roots['zcode'], openDatabase: openZcodeDatabase }),
   ]);
 }

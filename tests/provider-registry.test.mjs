@@ -83,6 +83,7 @@ test('built-in provider registry exposes every source without caller-side branch
     pi: '/sources/pi',
     qoder: '/sources/qoder',
     'qoder-cn': '/sources/qoder-cn',
+    stepcode: '/sources/stepcode',
     zcode: '/sources/zcode',
   });
 
@@ -98,6 +99,7 @@ test('built-in provider registry exposes every source without caller-side branch
     { id: 'pi', name: 'Pi' },
     { id: 'qoder', name: 'Qoder' },
     { id: 'qoder-cn', name: 'Qoder CN' },
+    { id: 'stepcode', name: 'Step Code' },
     { id: 'zcode', name: 'ZCode' },
   ]);
   assert.deepEqual(withPosixPaths(registry.watchTargets()), [
@@ -122,6 +124,7 @@ test('built-in provider registry exposes every source without caller-side branch
     { kind: 'file', path: '/sources/AppData/Roaming/com.qoder.app.stable/main.sqlite' },
     { kind: 'tree', path: '/sources/qoder-cn/projects' },
     { kind: 'file', path: '/sources/AppData/Roaming/com.qodercn.app.stable/main.sqlite' },
+    { kind: 'tree', path: '/sources/stepcode' },
     { kind: 'file', path: '/sources/zcode/db/db.sqlite' },
     { kind: 'file', path: '/sources/zcode/db/db.sqlite-wal' },
   ]);
