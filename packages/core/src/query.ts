@@ -936,7 +936,32 @@ function createAttuneApi(db: SqliteDb, runMutation: <T>(work: () => T) => T = (w
     assertEnglishMemoryText(summary, 'remember() summary');
     const normalizedPath = resolveMemoryPath(memoryPath, session_id);
     const normalizedAnchors = normalizeAnchors(anchors);
-    const proj = project || db.prepare('SELECT project FROM sessions WHERE id=?').get(session_id)?.project || null;
+    // Unknown sessions (see ADR 0008 for why session identity must be
+    // traceable) must not silently land as project-less rows: callers either
+    // pass project explicitly or point at a session that exists in this index.
+    const expectedProject =
+      typeof project === 'string' && project.length > 0 ? project : null;
+    const sessionRow: { project?: string | null } | undefined = session_id == null
+      ? undefined
+      : (db.prepare('SELECT project FROM sessions WHERE id=?').get(session_id) as { project?: string | null } | undefined);
+    if (session_id != null && sessionRow === undefined) {
+      throw new Error('remember() session_id does not match any session in this index');
+    }
+    const proj = expectedProject ?? sessionRow?.project ?? null;
+    if (proj === null && session_id == null) {
+      throw new Error('remember() requires project when session_id is omitted');
+    }
+    // The store itself must be trustworthy: read the memories-table shape
+    // back before any INSERT. A deviant schema (no PRIMARY KEY on id, e.g.
+    // a pre-memory-layer index) is a refused write, not a silent insert.
+    // This keeps the pre-write layer's promise even on paths where the
+    // layer checks cannot observe this database.
+    const pkColumns = (db.prepare('PRAGMA table_info(memories)').all() as { name: string; pk: number }[])
+      .filter((column) => Number(column.pk ?? 0) > 0)
+      .map((column) => column.name);
+    if (!(pkColumns.length === 1 && pkColumns[0] === 'id')) {
+      throw new Error('remember() refused: memory store lost id uniqueness');
+    }
     const created_at = new Date().toISOString();
     // Plain INSERT, never OR REPLACE: a memory id must not silently overwrite
     // an existing memory. Collisions regenerate instead of losing data.
