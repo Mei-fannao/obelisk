@@ -753,51 +753,103 @@ test('attune api exposes only memory mutation helpers', () => {
   db.close();
 });
 
+// An in-memory database with the real schema plus a session row, so
+// remember() can resolve its project from session_id.
+function collidingMemoryDb({ projectPath = '/tmp/quiet-zero-test' } = {}) {
+  const db = new DatabaseSync(':memory:');
+  db.exec(SCHEMA);
+  db.prepare(`
+    INSERT INTO sessions (id, title, project, project_path, started_at, ended_at, git_branch, message_count)
+    VALUES ('sid-collide', 'Collision session', 'collision-test', ?, '2026-06-12T10:00:00Z', '2026-06-12T11:00:00Z', 'main', 1)
+  `).run(projectPath);
+  return db;
+}
+
+// A memory store whose id column is not its sole PRIMARY KEY: the INSERT
+// must be refused before any write is attempted.
+function deviantMemoryStoreDb() {
+  const db = new DatabaseSync(':memory:');
+  db.exec(SCHEMA);
+  db.exec('DROP TABLE memories');
+  // Without the PRIMARY KEY declaration, id is an ordinary column: the
+  // pre-write layer checks cannot see this, so remember() must refuse.
+  db.exec(`
+    CREATE TABLE memories (
+      id TEXT, session_id TEXT, project TEXT,
+      message_start TEXT, message_end TEXT,
+      path TEXT, anchors TEXT, summary TEXT, created_at TEXT,
+      deleted_at TEXT, deleted_reason TEXT)
+  `);
+  return db;
+}
+
 test('remember regenerates the id on a primary-key collision instead of overwriting', () => {
   const memoryDir = makeTempDir('obelisk-remember-collision-');
   const memoryPath = join(memoryDir, 'memory.md');
   writeFileSync(memoryPath, '# Memory\n');
 
-  const inserted = [];
-  const attempted = [];
-  let failFirstInsert = true;
-  const fakeDb = {
-    prepare(sql) {
-      if (sql.startsWith('INSERT INTO memories')) {
-        return {
-          run: (...args) => {
-            attempted.push(args[0]);
-            if (failFirstInsert) {
-              failFirstInsert = false;
-              const error = new Error('UNIQUE constraint failed: memories.id');
-              error.errcode = 1555; // SQLITE_CONSTRAINT_PRIMARYKEY
-              throw error;
-            }
-            inserted.push(args);
-          },
-        };
-      }
-      throw new Error(`unexpected SQL: ${sql}`);
-    },
-    exec() {},
-    close() {},
+  const db = collidingMemoryDb();
+  const executed = [];
+  const realPrepare = db.prepare.bind(db);
+  let failNextInsert = true;
+  // Fail the first INSERT exactly like SQLite would, without replacing the
+  // statement, so the PRAGMA read and the retry path run against a real db.
+  db.prepare = (sql) => {
+    const stmt = realPrepare(sql);
+    if (String(sql).startsWith('INSERT INTO memories')) {
+      const run = stmt.run.bind(stmt);
+      stmt.run = (...args) => {
+        executed.push(args[0]);
+        if (failNextInsert) {
+          failNextInsert = false;
+          const error = new Error('UNIQUE constraint failed: memories.id');
+          error.errcode = 1555; // SQLITE_CONSTRAINT_PRIMARYKEY
+          throw error;
+        }
+        return run(...args);
+      };
+    }
+    return stmt;
   };
 
-  const result = createAttuneApi(fakeDb).remember({
+  const result = createAttuneApi(db).remember({
     path: memoryPath,
     project: 'collision-test',
     summary: 'Decision: memory ids regenerate on collision instead of overwriting.',
   });
 
   // The first attempt collided; the persisted row must carry a REGENERATED
-  // id (a retry of the same id would satisfy inserted[0][0] === result.id),
+  // id (a retry of the same id would satisfy executed[0] === result.id),
   // and the existing row was never replaced (plain INSERT, not OR REPLACE).
-  assert.equal(attempted.length, 2);
-  assert.notEqual(attempted[0], attempted[1]);
-  assert.equal(inserted.length, 1);
-  assert.equal(inserted[0][0], result.id);
-  assert.equal(attempted[1], result.id);
+  assert.equal(executed.length, 2);
+  assert.notEqual(executed[0], executed[1]);
+  assert.equal(executed[1], result.id);
   assert.match(result.id, /^mem-[0-9a-f-]{36}$/);
+
+  // Exactly one row persisted, carrying the regenerated id.
+  const rows = db.prepare('SELECT id FROM memories WHERE id=?').all(result.id);
+  assert.equal(rows.length, 1);
+  db.close();
+});
+
+test('remember refuses a memory store whose id is not its sole primary key', () => {
+  const memoryDir = makeTempDir('obelisk-remember-deviant-store-');
+  const memoryPath = join(memoryDir, 'memory.md');
+  writeFileSync(memoryPath, '# Memory\n');
+
+  const db = deviantMemoryStoreDb();
+  assert.throws(
+    () => createAttuneApi(db).remember({
+      path: memoryPath,
+      project: 'collision-test',
+      summary: 'Decision: a deviant memory store must be refused before any write.',
+    }),
+    /memory store lost id uniqueness/,
+  );
+
+  // The refusal must be a pre-write guard: no row was inserted at all.
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM memories').get().n, 0);
+  db.close();
 });
 
 test('remember stores absolute project-relative memory path', () => {
