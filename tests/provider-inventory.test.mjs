@@ -19,7 +19,6 @@ const providers = [
   ['cline', createClineProvider, 'sessions'],
   ['codex', createCodexProvider, 'sessions'],
   ['kimi', createKimiProvider, 'sessions'],
-  ['zcode', createZcodeProvider, 'db'],
 ];
 
 for (const [name, createProvider, inventoryDir] of providers) {
