@@ -98,6 +98,7 @@ test('built-in provider registry exposes every source without caller-side branch
   assert.deepEqual(registry.watchTargets(), [
     { kind: 'tree', path: join('/sources/claude', 'projects') },
     { kind: 'file', path: join('/sources/claude', 'history.jsonl') },
+    { kind: 'tree', path: join('/sources/cline', 'sessions') },
     { kind: 'tree', path: join('/sources/codex', 'sessions') },
     { kind: 'tree', path: join('/sources/codex', 'archived_sessions') },
     { kind: 'file', path: join('/sources/codex', 'session_index.jsonl') },
@@ -121,6 +122,5 @@ test('built-in provider registry exposes every source without caller-side branch
     { kind: 'file', path: join('/sources', 'AppData', 'Roaming', 'com.qodercn.app.stable', 'main.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite') },
     { kind: 'file', path: join('/sources/zcode', 'db', 'db.sqlite-wal') },
-    { kind: 'tree', path: join('/sources/cline', 'sessions') },
   ]);
 });
