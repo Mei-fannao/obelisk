@@ -1100,19 +1100,6 @@ function createAttuneApi(db: SqliteDb, runMutation: <T>(work: () => T) => T = (w
         try {
           db.prepare('INSERT INTO memories (id, session_id, project, message_start, message_end, path, anchors, summary, created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(
             id, session_id || null, proj, message_start || null, message_end || null, normalizedPath, normalizedAnchors, summary, created_at);
-          // The INSERT above can succeed against a deviant memories table
-          // (e.g. id without a PRIMARY KEY) that the pre-write layer checks
-          // were built to reject. Read the row back under the same retryable
-          // transaction: exactly one row must exist, and id must be the sole
-          // primary-key column. Violation means the fix cannot trust the
-          // store, so roll the whole mutation back with a clear error.
-          const rows = db.prepare('SELECT id FROM memories WHERE id=?').all(id) as { id: string }[];
-          const shape = db.prepare('PRAGMA table_info(memories)').all() as { name: string; pk: number }[];
-          const pkColumns = shape.filter((column) => Number(column.pk ?? 0) > 0).map((column) => column.name);
-          if (rows.length !== 1 || !(pkColumns.length === 1 && pkColumns[0] === 'id')) {
-            db.prepare('DELETE FROM memories WHERE id=?').run(id);
-            throw new Error('remember() refused: memory store lost id uniqueness');
-          }
           return;
         } catch (error) {
           // Primary-key collision: regenerate the id and retry. Any other
