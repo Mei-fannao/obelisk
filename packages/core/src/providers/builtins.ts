@@ -10,6 +10,7 @@ import { createHermesProvider, type HermesStoreOpener } from './hermes.ts';
 import { createKimiProvider } from './kimi.ts';
 import { createKiroProvider, type KiroDatabaseOpener } from './kiro.ts';
 import { createOmpProvider } from './omp.ts';
+import { createOpencodeProvider, type OpencodeDatabaseOpener } from './opencode.ts';
 import { createPiProvider } from './pi.ts';
 import { createQoderCnProvider, createQoderProvider } from './qoder.ts';
 import { createZcodeProvider, type ZcodeDatabaseOpener } from './zcode.ts';
@@ -20,19 +21,23 @@ export type BuiltinProviderRoots = Readonly<Record<string, string | undefined>>;
 export function createBuiltinProviderRegistry(
   roots: BuiltinProviderRoots = {},
   {
+    homeDir,
     cwd,
     copilotUserDataRoots,
     openCopilotChronicle,
     openHermesStore,
     openZcodeDatabase,
     openKiroDatabase,
+    openOpencodeDatabase,
   }: {
+    homeDir?: string;
     cwd?: string;
     copilotUserDataRoots?: readonly string[];
     openCopilotChronicle?: CopilotChronicleOpener;
     openHermesStore?: HermesStoreOpener;
     openZcodeDatabase?: ZcodeDatabaseOpener;
     openKiroDatabase?: KiroDatabaseOpener;
+    openOpencodeDatabase?: OpencodeDatabaseOpener;
   } = {},
 ): ProviderRegistry {
   return createProviderRegistry([
@@ -45,6 +50,7 @@ export function createBuiltinProviderRegistry(
     createKimiProvider({ rootDir: roots['kimi'] }),
     createKiroProvider({ rootDir: roots['kiro'], openDatabase: openKiroDatabase }),
     createOmpProvider({ rootDir: roots['omp'] }),
+    createOpencodeProvider({ rootDir: roots['opencode'], homeDir, openDatabase: openOpencodeDatabase }),
     createPiProvider({ rootDir: roots['pi'], cwd }),
     createQoderProvider({ rootDir: roots['qoder'] }),
     createQoderCnProvider({ rootDir: roots['qoder-cn'] }),

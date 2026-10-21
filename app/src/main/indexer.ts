@@ -1,6 +1,7 @@
 // Copyright (C) 2026 tommy0103 and contributors.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { RetryableSourceReadError } from '../../../packages/core/src/providers/source-read-error.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -331,18 +332,24 @@ function buildIndex({
       const openKiroDatabase = (sourcePath: string) => new (
         DatabaseImpl as new (path: string, options?: { readonly?: boolean; fileMustExist?: boolean; timeout?: number }) => any
       )(sourcePath, { readonly: true, fileMustExist: true, timeout: 500 });
+      const openOpencodeDatabase = (sourcePath: string) => new (
+        DatabaseImpl as new (path: string, options?: { readonly?: boolean; fileMustExist?: boolean; timeout?: number }) => any
+      )(sourcePath, { readonly: true, fileMustExist: true, timeout: 500 });
       const registry = providerRegistry
         ?? (providerSettings === undefined
-          ? createBuiltinProviderRegistry(roots, { openCopilotChronicle, openHermesStore, openZcodeDatabase, openKiroDatabase })
+          ? createBuiltinProviderRegistry(roots, { homeDir: compatibilityHome, openCopilotChronicle, openHermesStore, openZcodeDatabase, openKiroDatabase, openOpencodeDatabase })
           : createConfiguredBuiltinProviderRuntime(providerSettings, {
+            homeDir: compatibilityHome,
             baseRoots: {
               ...roots,
               ...(!hasExplicitProviderRoot(providerSettings, 'copilot') ? { copilot: undefined } : {}),
+              ...(!hasExplicitProviderRoot(providerSettings, 'opencode') ? { opencode: undefined } : {}),
             },
             openCopilotChronicle,
             openHermesStore,
             openZcodeDatabase,
             openKiroDatabase,
+            openOpencodeDatabase,
           }).registry);
       const providerPlan = createProviderIndexPlan(db, registry, {
         force,
@@ -464,6 +471,9 @@ function buildIndex({
             });
           }
           if (error instanceof ProviderIndexFailure) {
+            if (error.sourceError instanceof RetryableSourceReadError) {
+              inventoryIssues.push({ provider: error.item.provider.name, path: error.sourceError.sourcePath, error: error.sourceError.message });
+            }
             skipped.push({
               provider: error.item.provider.name,
               path: error.item.unit.key,
@@ -506,7 +516,7 @@ function buildIndex({
           complete: true,
           incompleteProviders,
           inventoryIssues,
-          watchHints: readRecentTranscriptHints(db),
+          watchHints: readRecentTranscriptHints(db, undefined, registry),
         };
       }
 
@@ -518,6 +528,9 @@ function buildIndex({
         onError: (error, { provider, unit }) => {
           if (isBeginBusyFailure(error)) return 'stop';
           if (hasUnusableTransaction(error)) throw error;
+          if (error instanceof RetryableSourceReadError) {
+            inventoryIssues.push({ provider: provider.name, path: error.sourcePath, error: error.message });
+          }
           skipped.push({
             provider: provider.name,
             path: unit.key,
@@ -568,7 +581,7 @@ function buildIndex({
         complete: providerResult.complete,
         incompleteProviders,
         inventoryIssues,
-        watchHints: readRecentTranscriptHints(db),
+        watchHints: readRecentTranscriptHints(db, undefined, registry),
       };
     } finally {
       if (messageFtsTriggersDropped) {

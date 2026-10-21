@@ -31,7 +31,7 @@ export type Cursor = string | null;
 export interface IndexUnit {
   /** Stable identity used as the index_state cursor key. */
   key: string;
-  /** Session id this unit indexes into. */
+  /** Session id this unit indexes into; empty for recordless source-control units. */
   sessionId: string;
   /** Project slug (dash-encoded path), when the source exposes one. */
   project?: string;
@@ -42,6 +42,10 @@ export interface IndexUnit {
   meta?: unknown;
   /** Previously indexed sessions atomically retracted by persist before this unit is written. */
   retractSessionIds?: readonly string[];
+  /** Cursor prerequisites checked inside this unit's destination transaction.
+   * Used when source observation/pending work must be durable before replacement.
+   * A prerequisite is observed state, not proof that its dependent units finished. */
+  requiresCursors?: readonly { key: string; cursor: string }[];
   /** Provider-scoped publication set. Every planned unit with this key commits
    * together; the adapter must withhold the set if discovery cannot supply it. */
   atomicGroup?: string;
@@ -330,6 +334,8 @@ export interface WatchTarget {
   readonly path: string;
   /** Exact descendant basenames that the app should forward from this tree, beyond JSON transcripts. */
   readonly fileNames?: readonly string[];
+  /** Optional predicate matching descendant basenames beyond exact fileNames. */
+  readonly matches?: (filename: string) => boolean;
 }
 
 /** Complete adapter interface used by every indexing and presentation caller. */
@@ -342,6 +348,13 @@ export interface ProviderAdapter extends Provider {
    * canonical source path. File-backed providers normally omit this.
    */
   sessionUnitKey?(session: IndexedSession): string;
+  /**
+   * Expand a provider-owned virtual unit key into real files for bounded
+   * startup/reconcile hot polling. Return [] for keys this adapter does not own.
+   * Called in the indexing worker; no source reads belong in the main process.
+   * Files may be absent temporarily (for example, a checkpointed WAL).
+   */
+  watchHints?(unitKey: string): readonly string[];
   watchTargets(configuredRoot: string): WatchTarget[];
   raw(input: RawLookup): RawRecord | null;
 }

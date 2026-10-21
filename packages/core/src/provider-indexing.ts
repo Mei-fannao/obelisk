@@ -4,6 +4,7 @@
 import { readdirSync, statSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
 
+import { RetryableSourceReadError } from './providers/source-read-error.ts';
 import { persist } from './persist.ts';
 import type { ProviderRegistry } from './providers/registry.ts';
 import type {
@@ -134,14 +135,32 @@ function expandHintDirectory(dir: string): string[] {
     .map(({ file }) => file);
 }
 
-export function readRecentTranscriptHints(db: SqliteDb, limit = WATCH_HINT_LIMIT): string[] {
-  const rows = db.prepare(
-    "SELECT jsonl_path FROM index_state WHERE jsonl_path NOT LIKE '\\_\\_%' ESCAPE '\\' ORDER BY mtime DESC LIMIT ?",
-  ).all(limit * 4);
+export function readRecentTranscriptHints(db: SqliteDb, limit = WATCH_HINT_LIMIT, registry?: ProviderRegistry): string[] {
+  const statement = db.prepare(
+    "SELECT jsonl_path FROM index_state WHERE jsonl_path NOT LIKE '\\_\\_%' ESCAPE '\\' ORDER BY mtime DESC",
+  );
+  // Many session units may expand to one store. Budget after expansion rather
+  // than truncating the unit census and starving the next channel. Both runtime
+  // bindings stream; all() keeps existing minimal test doubles compatible.
+  const rows = statement.iterate ? statement.iterate() : statement.all();
   const hints: string[] = [];
+  const seen = new Set<string>();
+  const add = (file: string) => {
+    if (hints.length >= limit || seen.has(file)) return;
+    seen.add(file);
+    hints.push(file);
+  };
+  const adapters = registry?.list() ?? [];
   for (const row of rows) {
     if (hints.length >= limit) break;
     const key = String(row.jsonl_path);
+    const providerFiles = adapters.flatMap(provider => provider.watchHints?.(key) ?? []);
+    if (providerFiles.length > 0) {
+      // An adapter may include a currently absent WAL: polling must also see
+      // its creation when the writer resumes without a native notification.
+      for (const file of providerFiles) add(file);
+      continue;
+    }
     let isDirectory: boolean;
     try {
       isDirectory = statSync(key).isDirectory();
@@ -149,12 +168,12 @@ export function readRecentTranscriptHints(db: SqliteDb, limit = WATCH_HINT_LIMIT
       continue; // deleted between build and hint collection
     }
     if (!isDirectory) {
-      hints.push(key);
+      add(key);
       continue;
     }
     for (const file of expandHintDirectory(key)) {
       if (hints.length >= limit) break;
-      hints.push(file);
+      add(file);
     }
   }
   return hints;
@@ -376,17 +395,18 @@ export function indexProviderPlan({
     batch.push(item);
   }
   for (const batch of batches) {
+    const hasTranscript = batch.some(item => item.unit.sessionId !== '');
     let active = batch[0]!;
     let cursors: Cursor[];
     try {
       cursors = runTransaction(`provider:${active.provider.name}:${active.unit.atomicGroup ?? active.unit.key}`, () => {
         // Replay scheduling and every unit in this publication set roll back
         // together. A BUSY retry runs the entire set again.
-        if (!replayScheduleCommitted) {
+        if (!replayScheduleCommitted && hasTranscript) {
           const scheduleReplay = db.prepare('UPDATE index_state SET replay_required = 1 WHERE jsonl_path = ?');
           const keysToReplay = new Set(
             plan.items
-              .filter(({ provider }) => plan.pendingMarkers.has(provider.name))
+              .filter(({ provider, unit }) => unit.sessionId !== '' && plan.pendingMarkers.has(provider.name))
               .map(({ unit }) => unit.key),
           );
           for (const keys of plan.replayKeys.values()) {
@@ -397,6 +417,11 @@ export function indexProviderPlan({
         }
         return batch.map(item => {
           active = item;
+          for (const required of item.unit.requiresCursors ?? []) {
+            if (storedProviderCursor(db, required.key) !== required.cursor) {
+              throw new RetryableSourceReadError(item.unit.key, `Source observation prerequisite was not committed: ${required.key}`);
+            }
+          }
           const nextCursor = persist(db, item.unit, item.provider.parse(item.unit, item.cursor));
           onPersisted(item, nextCursor);
           return nextCursor;
@@ -412,7 +437,7 @@ export function indexProviderPlan({
       }
       continue;
     }
-    replayScheduleCommitted = true;
+    if (hasTranscript) replayScheduleCommitted = true;
     for (const [index, item] of batch.entries()) {
       committed.push(item);
       onCommitted(item, cursors[index]!);
