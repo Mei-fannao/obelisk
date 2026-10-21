@@ -252,6 +252,18 @@ function resolveSingleInvocationNonce(
   return ranked[0].sessionId;
 }
 
+// `DISTINCT session_id` makes an index ordered by session_id look attractive,
+// so the planner picks idx_messages_session and scans every row of `messages`
+// — a cost proportional to total history rather than to the recency window
+// (#220: ~37s per `--query` call on a 4.7GB index). Callers collect into a
+// Set, so deduplicating in SQL buys nothing; without it the planner drives
+// from idx_messages_time and the scan stays bounded by the window. The
+// tool_calls leg avoids the same trap with CROSS JOIN.
+export const RECENT_CLI_INVOKER_MESSAGES_SQL = `
+      SELECT session_id FROM messages
+      WHERE timestamp >= ? AND (text LIKE ? OR text LIKE ?)
+    `;
+
 // Sessions holding a recent record of an actual CLI invocation (`obelisk
 // --query ...` / `obelisk --search ...` in a tool-call command line or message
 // text). Bounded to the same recency window as the nonce legs.
@@ -273,10 +285,7 @@ function recentCliInvokerSessions(
     }
   }
   if (indexedTables.has('messages')) {
-    const rows = db.prepare(`
-      SELECT DISTINCT session_id FROM messages
-      WHERE timestamp >= ? AND (text LIKE ? OR text LIKE ?)
-    `).all(cutoff, ...patterns);
+    const rows = db.prepare(RECENT_CLI_INVOKER_MESSAGES_SQL).all(cutoff, ...patterns);
     for (const row of rows) {
       if (typeof row.session_id === 'string') invokers.add(row.session_id);
     }
