@@ -4,6 +4,7 @@
 import { createClaudeProvider } from './claude.ts';
 import { createClineProvider } from './cline.ts';
 import { createCodexProvider } from './codex.ts';
+import { createCodexHostAntigravityProvider } from './codexhost-antigravity.ts';
 import { createCopilotProvider, type CopilotChronicleOpener } from './copilot.ts';
 import { createDeepseekProvider } from './deepseek.ts';
 import { createHermesProvider, type HermesStoreOpener } from './hermes.ts';
@@ -44,6 +45,7 @@ export function createBuiltinProviderRegistry(
     createClaudeProvider({ rootDir: roots['claude'] }),
     createClineProvider({ rootDir: roots['cline'] }),
     createCodexProvider({ rootDir: roots['codex'] }),
+    createCodexHostAntigravityProvider({ rootDir: roots['codexhost-antigravity'] }),
     createCopilotProvider({ rootDir: roots['copilot'], userDataRoots: copilotUserDataRoots, openChronicle: openCopilotChronicle }),
     createDeepseekProvider({ rootDir: roots['deepseek'] }),
     createHermesProvider({ rootDir: roots['hermes'], openStore: openHermesStore }),
