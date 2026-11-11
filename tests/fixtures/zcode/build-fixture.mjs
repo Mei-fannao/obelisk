@@ -39,6 +39,9 @@ const SENSITIVE_KEYS = new Set(['text', 'thinking', 'content', 'output', 'error'
 function sanitizeString(key, value) {
   if (typeof value !== 'string') return value;
   let out = value.replaceAll('联想', 'user');
+  // Provider credentials are short and can sit under arbitrary nested keys, so
+  // scrub them by shape before the length-based rules below.
+  out = out.replace(/sk-or-v1-[0-9a-f]{40,}/g, '[REDACTED_OPENROUTER_KEY]');
   if (SENSITIVE_KEYS.has(key) && out.length > 40) out = `[${key} sanitized: ${out.length} chars]`;
   else if (out.length > 240) out = `${out.slice(0, 240)}…[truncated]`;
   return out;
@@ -93,6 +96,10 @@ const LEAK_BYTES = [
   ['联想/GBK', Buffer.from([0xC1, 0xAA, 0xCF, 0xEB])],
   ['联想/UTF-16LE', Buffer.from('联想', 'utf16le')],
   ['jinyu/ASCII', Buffer.from('jinyu', 'ascii')],
+  // Real provider credentials must never reach a committed fixture. The string
+  // sanitizer only rewrites known long-text keys, so keys embedded in nested
+  // tool payloads (part.data) survived it once; the byte check is the backstop.
+  ['openrouter-key', Buffer.from('sk-or-v1-', 'ascii')],
 ];
 function assertNoLeakBytes(filePath) {
   const buf = readFileSync(filePath);
