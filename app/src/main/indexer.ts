@@ -14,10 +14,10 @@ import {
   backfillUnresolvedSessionProjectPathsOnce,
   dropMessageFtsTriggers,
   ensureFtsReady,
+  healWorkflowParentLinks,
   refreshSessionProjectPaths,
   repairOrphanedSessionMetadata,
 } from '../../../packages/core/src/index-finalize.ts';
-import { healWorkflowParentLinks } from '../../../packages/core/src/indexer.ts';
 import type { ProviderRegistry } from '../../../packages/core/src/providers/registry.ts';
 import {
   createConfiguredBuiltinProviderRuntime,

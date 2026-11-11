@@ -10,6 +10,7 @@ import {
   backfillSessionTitles,
   backfillUnresolvedSessionProjectPathsOnce,
   ensureFtsReady,
+  healWorkflowParentLinks,
   refreshSessionProjectPaths,
   repairOrphanedSessionMetadata,
 } from './index-finalize.ts';
@@ -32,7 +33,7 @@ import {
 import { coreSchemaNeedsMigration } from './schema-migrations.ts';
 import type { ProviderRegistry } from './providers/registry.ts';
 import { openCopilotChronicleWithNodeSqlite } from './providers/copilot-node.ts';
-import type { NodeSqliteDb, SqliteDb } from './sqlite-types.ts';
+import type { NodeSqliteDb } from './sqlite-types.ts';
 import { openHermesStoreWithNodeSqlite } from './providers/hermes-node.ts';
 import { openOpencodeDatabaseWithNodeSqlite } from './providers/opencode-node.ts';
 
@@ -131,30 +132,10 @@ function rethrowIfIndexWriterReadOnly(db: NodeSqliteDb, error: unknown): void {
 // the match can be completed in SQL. Runs at every finalize: missed links heal
 // on the next refresh instead of waiting for a force rebuild. instr() is exact
 // substring matching (no LIKE wildcards); unresolvable rows stay null.
-function healWorkflowParentLinks(db: SqliteDb): void {
-  db.prepare(`
-    UPDATE workflows
-    SET parent_tool_use_id = (
-      SELECT tr.tool_use_id
-      FROM tool_results tr
-      JOIN tool_calls tc ON tc.id = tr.tool_use_id AND tc.session_id = tr.session_id
-      WHERE tr.session_id = workflows.session_id
-        AND tc.name = 'Workflow'
-        AND instr(tr.content, workflows.run_id) > 0
-      ORDER BY tr.rowid
-      LIMIT 1
-    )
-    WHERE parent_tool_use_id IS NULL
-      AND EXISTS (
-        SELECT 1
-        FROM tool_results tr
-        JOIN tool_calls tc ON tc.id = tr.tool_use_id AND tc.session_id = tr.session_id
-        WHERE tr.session_id = workflows.session_id
-          AND tc.name = 'Workflow'
-          AND instr(tr.content, workflows.run_id) > 0
-      )
-  `).run();
-}
+//
+// Lives in index-finalize.ts (not here) so the app can run it without importing
+// this module: indexer.ts statically pulls in db.ts and the *-node.ts openers,
+// which would put node:sqlite on the Electron bundle graph.
 
 const BUILD_DEBOUNCE_MS = 30000;
 const APP_HEARTBEAT_FRESH_MS = 60000;

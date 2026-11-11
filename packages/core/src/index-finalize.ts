@@ -310,4 +310,46 @@ export function backfillUnresolvedSessionProjectPathsOnce(db: SqliteDb): boolean
   return true;
 }
 
+/**
+ * Complete `workflows.parent_tool_use_id` for rows whose parent Workflow tool
+ * call landed after the run json was indexed.
+ *
+ * A workflow unit links to its parent by matching the unique run id in the
+ * tool_result text. The run json can reach the index before that tool_result
+ * lands in the main transcript, leaving the link null with no later re-parse to
+ * fix it (the run json's mtime no longer moves). Once every unit is persisted
+ * the tool_results table holds the result text, so the match can be completed
+ * in SQL. Run at every finalize: missed links heal on the next refresh instead
+ * of waiting for a force rebuild. instr() is exact substring matching (no LIKE
+ * wildcards); unresolvable rows stay null.
+ *
+ * This lives here rather than in indexer.ts so the app can call it without
+ * importing that module - indexer.ts statically imports db.ts and the provider
+ * *-node.ts openers, which would put node:sqlite on the Electron bundle graph.
+ */
+export function healWorkflowParentLinks(db: SqliteDb): void {
+  db.prepare(`
+    UPDATE workflows
+    SET parent_tool_use_id = (
+      SELECT tr.tool_use_id
+      FROM tool_results tr
+      JOIN tool_calls tc ON tc.id = tr.tool_use_id AND tc.session_id = tr.session_id
+      WHERE tr.session_id = workflows.session_id
+        AND tc.name = 'Workflow'
+        AND instr(tr.content, workflows.run_id) > 0
+      ORDER BY tr.rowid
+      LIMIT 1
+    )
+    WHERE parent_tool_use_id IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM tool_results tr
+        JOIN tool_calls tc ON tc.id = tr.tool_use_id AND tc.session_id = tr.session_id
+        WHERE tr.session_id = workflows.session_id
+          AND tc.name = 'Workflow'
+          AND instr(tr.content, workflows.run_id) > 0
+      )
+  `).run();
+}
+
 export { FTS_TRIGGERS_READY_MARKER, PROJECT_PATH_BACKFILL_MARKER };
