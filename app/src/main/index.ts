@@ -131,6 +131,16 @@ function getRuntimePaths(persisted = loadPersistedSettings()) {
       fileMustExist: true,
       timeout: 500,
     }),
+    openOpencodeDatabase: sourcePath => new Database(sourcePath, {
+      readonly: true,
+      fileMustExist: true,
+      timeout: 500,
+    }),
+    openQoderDatabase: sourcePath => new Database(sourcePath, {
+      readonly: true,
+      fileMustExist: true,
+      timeout: 500,
+    }),
   });
   const providerRoots = runtime.roots;
   const providerRegistry = runtime.registry;

@@ -13,7 +13,7 @@ import { createKiroProvider, type KiroDatabaseOpener } from './kiro.ts';
 import { createOmpProvider } from './omp.ts';
 import { createOpencodeProvider, type OpencodeDatabaseOpener } from './opencode.ts';
 import { createPiProvider } from './pi.ts';
-import { createQoderCnProvider, createQoderProvider } from './qoder.ts';
+import { createQoderCnProvider, createQoderProvider, type QoderDatabaseOpener } from './qoder.ts';
 import { createZcodeProvider, type ZcodeDatabaseOpener } from './zcode.ts';
 import { createProviderRegistry, type ProviderRegistry } from './registry.ts';
 
@@ -30,6 +30,7 @@ export function createBuiltinProviderRegistry(
     openZcodeDatabase,
     openKiroDatabase,
     openOpencodeDatabase,
+    openQoderDatabase,
   }: {
     homeDir?: string;
     cwd?: string;
@@ -39,6 +40,7 @@ export function createBuiltinProviderRegistry(
     openZcodeDatabase?: ZcodeDatabaseOpener;
     openKiroDatabase?: KiroDatabaseOpener;
     openOpencodeDatabase?: OpencodeDatabaseOpener;
+    openQoderDatabase?: QoderDatabaseOpener;
   } = {},
 ): ProviderRegistry {
   return createProviderRegistry([
@@ -54,8 +56,8 @@ export function createBuiltinProviderRegistry(
     createOmpProvider({ rootDir: roots['omp'] }),
     createOpencodeProvider({ rootDir: roots['opencode'], homeDir, openDatabase: openOpencodeDatabase }),
     createPiProvider({ rootDir: roots['pi'], cwd }),
-    createQoderProvider({ rootDir: roots['qoder'] }),
-    createQoderCnProvider({ rootDir: roots['qoder-cn'] }),
+    createQoderProvider({ rootDir: roots['qoder'], openDatabase: openQoderDatabase }),
+    createQoderCnProvider({ rootDir: roots['qoder-cn'], openDatabase: openQoderDatabase }),
     createZcodeProvider({ rootDir: roots['zcode'], openDatabase: openZcodeDatabase }),
   ]);
 }

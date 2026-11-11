@@ -28,11 +28,12 @@
 // `automationExecution` (Quest) sessions are indexed as ordinary sessions.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, sep } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 
 import { filePath, projectSlugFromPath, sourceInventoryIssue, trunc, truncJson } from '../parsing.ts';
+import type { SqliteDb } from '../sqlite-types.ts';
 
 import type {
   Cursor,
@@ -96,6 +97,9 @@ function withRoot(base: QoderInstallSpec, overrides: { rootDir?: string; dbPath?
 const SKIP_LINE_TYPES = new Set([
   'workspace-directories', 'runtime-config', 'active-leaf', 'attachment', 'last-prompt',
 ]);
+
+/** Read-only opener for the Qoder GUI database; the Electron app injects better-sqlite3. */
+export type QoderDatabaseOpener = (dbPath: string) => SqliteDb;
 
 interface QoderSessionUnitMeta {
   readonly kind: 'session';
@@ -165,10 +169,21 @@ interface InstallDbInfo {
   readonly model: string | null;
 }
 
-function readSessions(dbPath: string): Map<string, InstallDbInfo> | null {
-  let db: DatabaseSync;
+function defaultOpenDatabase(dbPath: string): SqliteDb {
+  // Keep the Node-only binding out of the Electron bundle. Rollup otherwise
+  // hoists even a literal require('node:sqlite') into the App import graph.
+  const require = createRequire(import.meta.url);
+  const nodeSqliteSpecifier = ['node', 'sqlite'].join(':');
+  const { DatabaseSync } = require(nodeSqliteSpecifier) as {
+    DatabaseSync: new (path: string, options: { readOnly: boolean }) => SqliteDb;
+  };
+  return new DatabaseSync(dbPath, { readOnly: true });
+}
+
+function readSessions(dbPath: string, openDatabase: QoderDatabaseOpener): Map<string, InstallDbInfo> | null {
+  let db: SqliteDb;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true });
+    db = openDatabase(dbPath);
   } catch {
     return null;
   }
@@ -408,7 +423,10 @@ function changedPathsTouch(root: string, changedPaths: readonly string[], target
   return false;
 }
 
-export function createQoderInstallProvider(spec: QoderInstallSpec): ProviderAdapter {
+export function createQoderInstallProvider(
+  spec: QoderInstallSpec,
+  { openDatabase = defaultOpenDatabase }: { openDatabase?: QoderDatabaseOpener } = {},
+): ProviderAdapter {
   const name = spec.name;
   return {
     name,
@@ -468,7 +486,7 @@ export function createQoderInstallProvider(spec: QoderInstallSpec): ProviderAdap
 
       function discoverInstall() {
         const projectsDir = join(installDir, 'projects');
-        const sessions = existsSync(dbPath) ? readSessions(dbPath) : null;
+        const sessions = existsSync(dbPath) ? readSessions(dbPath, openDatabase) : null;
         if (sessions === null && existsSync(dbPath)) {
           inventoryComplete = false;
           ctx.reportIncompleteInventory?.({ path: dbPath, error: 'Source database is unreadable' });
@@ -627,7 +645,7 @@ export function createQoderInstallProvider(spec: QoderInstallSpec): ProviderAdap
         source: name,
       };
       const after = cursorFor(
-        readSessions(meta.dbPath)?.get(meta.nativeId)?.updated_at ?? meta.dbUpdatedAt,
+        readSessions(meta.dbPath, openDatabase)?.get(meta.nativeId)?.updated_at ?? meta.dbUpdatedAt,
         meta.jsonlPath,
       );
       if (after !== meta.currentCursor) {
@@ -657,10 +675,16 @@ export function createQoderInstallProvider(spec: QoderInstallSpec): ProviderAdap
   };
 }
 
-export function createQoderCnProvider(overrides: { rootDir?: string; dbPath?: string } = {}): ProviderAdapter {
-  return createQoderInstallProvider(withRoot(qoderCnInstall(), overrides));
+export function createQoderCnProvider(
+  overrides: { rootDir?: string; dbPath?: string; openDatabase?: QoderDatabaseOpener } = {},
+): ProviderAdapter {
+  const { openDatabase, ...roots } = overrides;
+  return createQoderInstallProvider(withRoot(qoderCnInstall(), roots), { openDatabase });
 }
 
-export function createQoderProvider(overrides: { rootDir?: string; dbPath?: string } = {}): ProviderAdapter {
-  return createQoderInstallProvider(withRoot(qoderIntlInstall(), overrides));
+export function createQoderProvider(
+  overrides: { rootDir?: string; dbPath?: string; openDatabase?: QoderDatabaseOpener } = {},
+): ProviderAdapter {
+  const { openDatabase, ...roots } = overrides;
+  return createQoderInstallProvider(withRoot(qoderIntlInstall(), roots), { openDatabase });
 }
